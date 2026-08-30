@@ -1115,7 +1115,14 @@ export default function App() {
             )}
           </div>
 
-          <p className="mt-8 text-xs text-stone-400 leading-relaxed">
+          <a href="./afm.html"
+            className="mt-8 block bg-white border border-indigo-200 rounded-xl p-4 hover:border-indigo-400">
+            <p className="text-xs uppercase tracking-widest text-indigo-700 font-semibold">Следующий экзамен</p>
+            <h3 className="font-serif text-lg mt-0.5">AFM Trainer — восстановление базы FM</h3>
+            <p className="text-sm text-stone-600 mt-1">Короткие уроки с расчётами: дисконтирование, налог и инфляция в DCF, CAPM, WACC, бета активов.</p>
+          </a>
+
+          <p className="mt-6 text-xs text-stone-400 leading-relaxed">
             Все 15 заданий — оригинальные, составлены по формату и силлабусу AAA (INT). Реальные past papers
             с сайта ACCA можно добавлять через «Свой вопрос». Оценка ИИ — ориентир для тренировки,
             а не официальная оценка ACCA. Норматив времени: 1,95 мин на балл.
