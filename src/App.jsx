@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 import {
   Clock, FileText, ChevronLeft, Plus, History, Award, Loader2, Trash2,
   CheckCircle2, XCircle, AlertTriangle, PenLine, Timer, ArrowRight, BookOpen,
-  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload
+  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp
 } from "lucide-react";
 
 /* ============================================================
@@ -1584,6 +1586,58 @@ function AddQuestion({ onBack, onSave, preset }) {
   const [err, setErr] = useState("");
   const [genTopic, setGenTopic] = useState(GEN_TOPICS[0]);
   const [genBusy, setGenBusy] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [pdfName, setPdfName] = useState("");
+  const [pdfFrom, setPdfFrom] = useState("");
+  const [pdfTo, setPdfTo] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfMsg, setPdfMsg] = useState("");
+
+  const openPdf = async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    setPdfBusy(true); setPdfMsg("");
+    try {
+      const buf = await f.arrayBuffer();
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      setPdfDoc(doc); setPdfName(f.name);
+      setPdfFrom("1"); setPdfTo(String(Math.min(4, doc.numPages)));
+      setPdfMsg("Файл открыт локально: страниц " + doc.numPages + ". Укажите диапазон со сценарием.");
+    } catch (e) {
+      setPdfMsg("Не удалось прочитать PDF: " + ((e && e.message) || e));
+    }
+    setPdfBusy(false);
+  };
+
+  const grabPages = async (target) => {
+    if (!pdfDoc) return;
+    const a = Math.max(1, Number(pdfFrom) || 1);
+    const b = Math.min(pdfDoc.numPages, Number(pdfTo) || a);
+    if (b < a) { setPdfMsg("Конечная страница меньше начальной."); return; }
+    if (b - a > 24) { setPdfMsg("Слишком большой диапазон — не более 25 страниц за раз."); return; }
+    setPdfBusy(true); setPdfMsg("");
+    try {
+      let out = "";
+      for (let n = a; n <= b; n++) {
+        const page = await pdfDoc.getPage(n);
+        const tc = await page.getTextContent();
+        let line = "";
+        for (const it of tc.items) {
+          line += (it.str || "");
+          if (it.hasEOL) { out += line.trim() + "\n"; line = ""; }
+        }
+        if (line.trim()) out += line.trim() + "\n";
+        out += "\n";
+      }
+      const text = out.replace(/\n{3,}/g, "\n\n").trim();
+      if (target === "scenario") setScenario(prev => (prev ? prev + "\n\n" : "") + text);
+      else setReqs(prev => prev.map((r, i) => i === 0 ? { ...r, text: (r.text ? r.text + "\n" : "") + text } : r));
+      setPdfMsg("Вставлено страниц: " + (b - a + 1) + ". Проверьте текст и уберите лишнее.");
+    } catch (e) {
+      setPdfMsg("Ошибка извлечения: " + ((e && e.message) || e));
+    }
+    setPdfBusy(false);
+  };
 
   const letters = "abcdefgh";
   const techTotal = reqs.reduce((s, r) => s + (Number(r.marks) || 0), 0);
@@ -1691,6 +1745,46 @@ function AddQuestion({ onBack, onSave, preset }) {
                   className="mt-1 w-28 rounded-lg border border-stone-300 p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-800" />
               </div>
             </div>
+          </div>
+
+          <div className="bg-white border border-stone-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold flex items-center gap-1.5">
+              <FileUp className="w-3.5 h-3.5" /> Вставить из PDF
+            </p>
+            <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+              Файл открывается прямо в браузере и никуда не отправляется — ни на сервер, ни в интернет.
+              Используйте только те материалы, которыми владеете, и только для личной подготовки.
+            </p>
+            <label className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50 cursor-pointer">
+              <FileUp className="w-4 h-4" /> Выбрать PDF
+              <input type="file" accept="application/pdf,.pdf" onChange={openPdf} className="hidden" />
+            </label>
+            {pdfDoc && (
+              <div className="mt-3">
+                <p className="font-mono text-xs text-stone-500 truncate">{pdfName} · {pdfDoc.numPages} стр.</p>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="text-xs text-stone-600">с</label>
+                    <input type="number" value={pdfFrom} onChange={e => setPdfFrom(e.target.value)}
+                      className="mt-1 w-20 rounded-lg border border-stone-300 p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-800" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-600">по</label>
+                    <input type="number" value={pdfTo} onChange={e => setPdfTo(e.target.value)}
+                      className="mt-1 w-20 rounded-lg border border-stone-300 p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-800" />
+                  </div>
+                  <button onClick={() => grabPages("scenario")} disabled={pdfBusy}
+                    className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-800 disabled:opacity-60">
+                    {pdfBusy ? "Читаю..." : "В сценарий"}
+                  </button>
+                  <button onClick={() => grabPages("req")} disabled={pdfBusy}
+                    className="rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50 disabled:opacity-60">
+                    В требование (a)
+                  </button>
+                </div>
+              </div>
+            )}
+            {pdfMsg && <p className="text-xs text-stone-600 mt-2">{pdfMsg}</p>}
           </div>
 
           <div className="bg-white border border-stone-200 rounded-xl p-4">
