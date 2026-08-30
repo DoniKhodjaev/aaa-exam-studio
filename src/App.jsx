@@ -1592,6 +1592,7 @@ function AddQuestion({ onBack, onSave, preset }) {
   const [pdfTo, setPdfTo] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfMsg, setPdfMsg] = useState("");
+  const [pdfPreview, setPdfPreview] = useState("");
 
   const openPdf = async (ev) => {
     const f = ev.target.files && ev.target.files[0];
@@ -1630,9 +1631,17 @@ function AddQuestion({ onBack, onSave, preset }) {
         out += "\n";
       }
       const text = out.replace(/\n{3,}/g, "\n\n").trim();
-      if (target === "scenario") setScenario(prev => (prev ? prev + "\n\n" : "") + text);
-      else setReqs(prev => prev.map((r, i) => i === 0 ? { ...r, text: (r.text ? r.text + "\n" : "") + text } : r));
-      setPdfMsg("Вставлено страниц: " + (b - a + 1) + ". Проверьте текст и уберите лишнее.");
+      if (target === "scenario") {
+        setScenario(prev => (prev ? prev + "\n\n" : "") + text);
+        setPdfMsg("Вставлено в сценарий, страниц: " + (b - a + 1) + ". Уберите колонтитулы и лишнее.");
+      } else if (target === "preview") {
+        setPdfPreview(text);
+        setPdfMsg("Текст страниц показан ниже — скопируйте нужный кусок вручную.");
+      } else {
+        const idx = Number(target);
+        setReqs(prev => prev.map((r, i) => i === idx ? { ...r, text: (r.text ? r.text + "\n" : "") + text } : r));
+        setPdfMsg("Вставлено в требование (" + "abcdefgh"[idx] + "). Оставьте только формулировку требования.");
+      }
     } catch (e) {
       setPdfMsg("Ошибка извлечения: " + ((e && e.message) || e));
     }
@@ -1752,8 +1761,9 @@ function AddQuestion({ onBack, onSave, preset }) {
               <FileUp className="w-3.5 h-3.5" /> Вставить из PDF
             </p>
             <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-              Файл открывается прямо в браузере и никуда не отправляется — ни на сервер, ни в интернет.
-              Используйте только те материалы, которыми владеете, и только для личной подготовки.
+              Файл открывается прямо в браузере и никуда не отправляется. Порядок: сначала страницы со сценарием
+              и exhibits — кнопкой «В сценарий»; затем страницу с «Required:» — кнопкой нужного требования,
+              и оставьте в поле только саму формулировку. Используйте только материалы, которыми владеете.
             </p>
             <label className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50 cursor-pointer">
               <FileUp className="w-4 h-4" /> Выбрать PDF
@@ -1777,14 +1787,30 @@ function AddQuestion({ onBack, onSave, preset }) {
                     className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-800 disabled:opacity-60">
                     {pdfBusy ? "Читаю..." : "В сценарий"}
                   </button>
-                  <button onClick={() => grabPages("req")} disabled={pdfBusy}
+                  <button onClick={() => grabPages("preview")} disabled={pdfBusy}
                     className="rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50 disabled:opacity-60">
-                    В требование (a)
+                    Показать текстом
                   </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-stone-500">В требование:</span>
+                  {reqs.map((r, i) => (
+                    <button key={i} onClick={() => grabPages(String(i))} disabled={pdfBusy}
+                      className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs font-mono hover:bg-stone-50 disabled:opacity-60">
+                      ({"abcdefgh"[i]})
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
             {pdfMsg && <p className="text-xs text-stone-600 mt-2">{pdfMsg}</p>}
+            {pdfPreview && (
+              <div className="mt-2">
+                <textarea readOnly value={pdfPreview}
+                  className="w-full h-40 rounded-lg border border-stone-300 bg-stone-50 p-2 text-xs font-mono" />
+                <button onClick={() => setPdfPreview("")} className="mt-1 text-xs text-stone-400 hover:text-stone-700">Скрыть</button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white border border-stone-200 rounded-xl p-4">
