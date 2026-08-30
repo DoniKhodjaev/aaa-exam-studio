@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 import {
   Clock, FileText, ChevronLeft, Plus, History, Award, Loader2, Trash2,
   CheckCircle2, XCircle, AlertTriangle, PenLine, Timer, ArrowRight, BookOpen,
-  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp
+  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp, Highlighter
 } from "lucide-react";
 
 /* ============================================================
@@ -544,6 +544,81 @@ function computeTotals(questions, byQ) {
 
 /* ---------------- small UI pieces ---------------- */
 
+/* ---------------- выделяемый текст (маркер как в CBE) ---------------- */
+
+function offsetIn(root, node, off) {
+  let acc = 0;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) {
+    if (n === node) return acc + off;
+    acc += n.nodeValue.length;
+  }
+  return null;
+}
+
+function mergeRanges(list) {
+  const a = list.slice().sort((x, y) => x.s - y.s);
+  const out = [];
+  for (const r of a) {
+    const last = out[out.length - 1];
+    if (last && r.s <= last.e) last.e = Math.max(last.e, r.e);
+    else out.push({ s: r.s, e: r.e });
+  }
+  return out;
+}
+
+function Markable({ text, ranges, hlMode, onChange, className }) {
+  const ref = useRef(null);
+  const rs = ranges || [];
+
+  const apply = () => {
+    if (!hlMode) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+    const root = ref.current;
+    if (!root || !root.contains(r.startContainer) || !root.contains(r.endContainer)) return;
+    const s0 = offsetIn(root, r.startContainer, r.startOffset);
+    const e0 = offsetIn(root, r.endContainer, r.endOffset);
+    if (s0 == null || e0 == null || e0 <= s0) return;
+    onChange(mergeRanges(rs.concat([{ s: s0, e: e0 }])));
+    sel.removeAllRanges();
+  };
+
+  const removeAt = (i, ev) => {
+    if (!hlMode) return;
+    ev.stopPropagation();
+    onChange(rs.filter((_, j) => j !== i));
+  };
+
+  let body;
+  if (!rs.length) body = text;
+  else {
+    const parts = [];
+    let pos = 0;
+    rs.forEach((r, i) => {
+      if (r.s > pos) parts.push(<span key={"p" + i}>{text.slice(pos, r.s)}</span>);
+      parts.push(
+        <mark key={"m" + i} onClick={(ev) => removeAt(i, ev)}
+          className={"bg-yellow-200 rounded-sm " + (hlMode ? "cursor-pointer" : "")}>
+          {text.slice(r.s, r.e)}
+        </mark>
+      );
+      pos = Math.max(pos, r.e);
+    });
+    if (pos < text.length) parts.push(<span key="last">{text.slice(pos)}</span>);
+    body = parts;
+  }
+
+  return (
+    <div ref={ref} onMouseUp={apply} onTouchEnd={apply}
+      className={className + (hlMode ? " selection:bg-yellow-300" : "")}>
+      {body}
+    </div>
+  );
+}
+
 function SectionTag({ section }) {
   return (
     <span className={"inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tracking-wide " +
@@ -593,6 +668,8 @@ export default function App() {
   const [improve, setImprove] = useState(null); // {qid, rid, text, busy}
   const [maBusy, setMaBusy] = useState(null);   // "qid:rid" пока грузится образцовый ответ
   const [hasKey, setHasKey] = useState(false);
+  const [hlMode, setHlMode] = useState(false);
+  const [hl, setHl] = useState({});
   const [addPreset, setAddPreset] = useState(null);
 
   const builtinQuestions = EXAMS.flatMap(e => e.questions);
@@ -622,6 +699,28 @@ export default function App() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [view, session]);
+
+  /* --- выделения текущего вопроса --- */
+  useEffect(() => {
+    if (view !== "exam" || !session) return;
+    const q = session.questions[qIdx];
+    if (!q) return;
+    (async () => setHl(await sGet("aaa3:hl:" + q.id, {})))();
+  }, [view, session, qIdx]);
+
+  const saveHl = (key, ranges) => {
+    const q = session && session.questions[qIdx];
+    if (!q) return;
+    const next = { ...hl, [key]: ranges };
+    setHl(next);
+    sSet("aaa3:hl:" + q.id, next);
+  };
+  const clearHl = () => {
+    const q = session && session.questions[qIdx];
+    if (!q) return;
+    setHl({});
+    sSet("aaa3:hl:" + q.id, {});
+  };
 
   /* --- draft autosave --- */
   useEffect(() => {
@@ -1032,23 +1131,43 @@ export default function App() {
       s + qq.requirements.reduce((s2, r) => s2 + wordsOf((answers[qq.id] || {})[r.id]), 0), 0);
     const qAnswered = (qq) => qq.requirements.some(r => ((answers[qq.id] || {})[r.id] || "").trim());
 
+    const hlCount = Object.values(hl).reduce((n, v) => n + (v ? v.length : 0), 0);
     const scenario = (
       <div className="space-y-4">
+        <div className="flex items-center gap-2 flex-wrap bg-white border border-stone-200 rounded-xl px-3 py-2">
+          <button onClick={() => setHlMode(v => !v)}
+            className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium " +
+              (hlMode ? "bg-yellow-300 text-stone-900" : "border border-stone-300 bg-white hover:bg-stone-50")}>
+            <Highlighter className="w-4 h-4" /> Маркер {hlMode ? "вкл" : "выкл"}
+          </button>
+          {hlCount > 0 && (
+            <button onClick={clearHl} className="text-xs text-stone-500 hover:text-red-800">
+              Снять все ({hlCount})
+            </button>
+          )}
+          <span className="text-xs text-stone-400 ml-auto">
+            {hlMode ? "Выделите текст мышью; нажмите на выделенное, чтобы снять" : "Включите, чтобы отмечать важное"}
+          </span>
+        </div>
         {q.exhibits.map((e, i) => (
           <div key={i} className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5">
             <p className="text-xs uppercase tracking-widest text-red-800 font-semibold">Exhibit {i + 1}</p>
             <h4 className="font-serif text-lg mt-0.5">{e.title}</h4>
-            <div className="mt-2 font-serif text-sm leading-relaxed text-stone-800 whitespace-pre-wrap">{e.content}</div>
+            <Markable text={e.content} ranges={hl["e" + i]} hlMode={hlMode}
+              onChange={(r) => saveHl("e" + i, r)}
+              className="mt-2 font-serif text-sm leading-relaxed text-stone-800 whitespace-pre-wrap" />
           </div>
         ))}
         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Requirements</p>
           <div className="mt-2 space-y-2">
             {q.requirements.map(r => (
-              <p key={r.id} className="font-serif text-sm leading-relaxed">
-                <span className="font-semibold">({r.id})</span> {r.text}{" "}
+              <div key={r.id} className="font-serif text-sm leading-relaxed">
+                <span className="font-semibold">({r.id})</span>{" "}
+                <Markable text={r.text} ranges={hl["r" + r.id]} hlMode={hlMode}
+                  onChange={(v) => saveHl("r" + r.id, v)} className="inline" />{" "}
                 <span className="font-mono text-xs text-stone-500">({r.marks} marks)</span>
-              </p>
+              </div>
             ))}
             <p className="font-serif text-sm text-stone-600">
               Professional marks will be awarded for the demonstration of skill. <span className="font-mono text-xs text-stone-500">({q.skillsMarks} marks)</span>
