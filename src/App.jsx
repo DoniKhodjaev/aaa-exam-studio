@@ -4,7 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mi
 import {
   Clock, FileText, ChevronLeft, Plus, History, Award, Loader2, Trash2,
   CheckCircle2, XCircle, AlertTriangle, PenLine, Timer, ArrowRight, BookOpen,
-  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp, Highlighter
+  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp, Highlighter, Pause, Play
 } from "lucide-react";
 
 /* ============================================================
@@ -695,7 +695,7 @@ export default function App() {
 
   /* --- timer tick --- */
   useEffect(() => {
-    if (view !== "exam" || !session) return;
+    if (view !== "exam" || !session || session.paused) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [view, session]);
@@ -728,7 +728,9 @@ export default function App() {
     const h = setTimeout(() => {
       sSet(draftKey(session.key), {
         kind: session.kind, title: session.title, answers,
-        startedAt: session.startedAt, endAt: session.endAt
+        startedAt: session.startedAt, endAt: session.endAt,
+        paused: !!session.paused, remainingMs: session.remainingMs,
+        durationMs: session.durationMs
       });
     }, 1200);
     return () => clearTimeout(h);
@@ -756,6 +758,7 @@ export default function App() {
     setSession({
       kind: desc.kind, key: desc.key, title: desc.title, questions: desc.questions,
       startedAt: st, endAt: st + desc.minutes * 60000,
+      durationMs: desc.minutes * 60000, paused: false, remainingMs: null,
       marksTotal: desc.questions.reduce((s, q) => s + q.marks, 0)
     });
     setAnswers({});
@@ -765,10 +768,15 @@ export default function App() {
   };
   const resumeDraft = () => {
     const { desc, draft } = pendingDraft;
+    const dur = draft.durationMs || desc.minutes * 60000;
+    const wasPaused = !!draft.paused;
     setSession({
       kind: desc.kind, key: desc.key, title: desc.title, questions: desc.questions,
       startedAt: draft.startedAt || Date.now(),
-      endAt: draft.endAt || Date.now() + desc.minutes * 60000,
+      endAt: wasPaused ? Date.now() + (draft.remainingMs || dur) : (draft.endAt || Date.now() + dur),
+      durationMs: dur,
+      paused: wasPaused,
+      remainingMs: wasPaused ? (draft.remainingMs != null ? draft.remainingMs : dur) : null,
       marksTotal: desc.questions.reduce((s, q) => s + q.marks, 0)
     });
     setAnswers(draft.answers || {});
@@ -788,8 +796,24 @@ export default function App() {
     setAnswers(prev => ({ ...prev, [qid]: { ...(prev[qid] || {}), [rid]: val } }));
   };
 
+  const pauseExam = () => {
+    if (!session || session.paused) return;
+    setSession(prev => ({ ...prev, paused: true, remainingMs: prev.endAt - Date.now() }));
+  };
+  const resumeExam = () => {
+    if (!session || !session.paused) return;
+    setSession(prev => ({ ...prev, paused: false, endAt: Date.now() + (prev.remainingMs || 0), remainingMs: null }));
+  };
   const leaveExam = () => {
-    if (window.confirm("Выйти? Черновик ответов сохранён, таймер продолжит идти.")) {
+    if (window.confirm("Выйти? Таймер встанет на паузу, ответы сохранятся — можно продолжить с того же места.")) {
+      if (session && !session.paused) {
+        const rem = session.endAt - Date.now();
+        sSet(draftKey(session.key), {
+          kind: session.kind, title: session.title, answers,
+          startedAt: session.startedAt, endAt: session.endAt,
+          paused: true, remainingMs: rem, durationMs: session.durationMs
+        });
+      }
       setView("home"); setSession(null);
     }
   };
@@ -814,8 +838,8 @@ export default function App() {
         answers: ans,
         results: byQ,
         totals,
-        timeUsedSec: Math.round((Date.now() - sess.startedAt) / 1000),
-        overtime: Date.now() > sess.endAt
+        timeUsedSec: Math.round(((sess.durationMs || 0) - (sess.paused ? (sess.remainingMs || 0) : (sess.endAt - Date.now()))) / 1000),
+        overtime: (sess.paused ? (sess.remainingMs || 0) : (sess.endAt - Date.now())) < 0
       };
       const list = [attempt, ...attempts];
       setAttempts(list);
@@ -1120,8 +1144,8 @@ export default function App() {
   /* ---------- EXAM ---------- */
   if (view === "exam" && session) {
     const q = session.questions[qIdx];
-    const remaining = session.endAt - now;
-    const durMs = session.endAt - session.startedAt;
+    const remaining = session.paused ? (session.remainingMs || 0) : session.endAt - now;
+    const durMs = session.durationMs || (session.endAt - session.startedAt);
     const frac = durMs > 0 ? remaining / durMs : 0;
     const expired = remaining <= 0;
     const timerCls = expired ? "bg-red-800 text-white" :
@@ -1221,6 +1245,13 @@ export default function App() {
             <div className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-mono text-sm font-semibold " + timerCls}>
               <Timer className="w-4 h-4" /> {fmtClock(remaining)}
             </div>
+            <button onClick={() => session.paused ? resumeExam() : pauseExam()}
+              title={session.paused ? "Продолжить" : "Пауза"}
+              className={"inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium " +
+                (session.paused ? "bg-emerald-600 text-white hover:bg-emerald-700" : "border border-stone-300 bg-white hover:bg-stone-50")}>
+              {session.paused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+              <span className="hidden sm:inline">{session.paused ? "Продолжить" : "Пауза"}</span>
+            </button>
           </div>
           {expired && (
             <div className="bg-red-800 text-white text-xs text-center py-1.5 px-4">
@@ -1258,10 +1289,32 @@ export default function App() {
           </p>
         </div>
 
-        <div className="max-w-6xl mx-auto px-4 py-3 pb-16 grid lg:grid-cols-2 gap-4">
-          <div className={(mobTab === "task" ? "block" : "hidden") + " lg:block"}>{scenario}</div>
-          <div className={(mobTab === "answer" ? "block" : "hidden") + " lg:block"}>{answerCol}</div>
-        </div>
+        {session.paused ? (
+          <div className="max-w-6xl mx-auto px-4 py-16">
+            <div className="bg-white border border-stone-200 rounded-xl p-8 text-center max-w-md mx-auto">
+              <Pause className="w-8 h-8 mx-auto text-stone-400" />
+              <h3 className="font-serif text-2xl mt-3">Пауза</h3>
+              <p className="text-sm text-stone-600 mt-1">
+                Осталось <span className="font-mono font-semibold">{fmtClock(remaining)}</span>. Ответы сохранены.
+              </p>
+              <p className="text-xs text-stone-400 mt-2">
+                Текст задания скрыт, чтобы пауза не превращалась в лишнее время на чтение.
+              </p>
+              <button onClick={resumeExam}
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 font-medium hover:bg-emerald-700">
+                <Play className="w-5 h-5" /> Продолжить
+              </button>
+              <button onClick={leaveExam} className="mt-2 w-full text-xs text-stone-400 hover:text-stone-700">
+                Выйти и вернуться позже
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-6xl mx-auto px-4 py-3 pb-16 grid lg:grid-cols-2 gap-4">
+            <div className={(mobTab === "task" ? "block" : "hidden") + " lg:block"}>{scenario}</div>
+            <div className={(mobTab === "answer" ? "block" : "hidden") + " lg:block"}>{answerCol}</div>
+          </div>
+        )}
       </div>
     );
   }
