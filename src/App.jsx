@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Clock, FileText, ChevronLeft, Plus, History, Award, Loader2, Trash2,
   CheckCircle2, XCircle, AlertTriangle, PenLine, Timer, ArrowRight, BookOpen,
-  Sparkles, RefreshCw, ListChecks, KeyRound
+  Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload
 } from "lucide-react";
 
 /* ============================================================
@@ -291,8 +291,53 @@ async function sDel(key) {
 }
 
 /* --- API-ключ и модель (хранятся только в браузере) --- */
-const AK = "aaa3:apikey";
-const AM = "aaa3:model";
+
+/* --- Каталог реальных экзаменов ACCA: только метаданные.
+   Тексты заданий защищены авторским правом ACCA и в репозиторий не входят.
+   Пользователь вставляет их сам; они хранятся только в его браузере. --- */
+const PAST_PAPERS = [
+  { id: "sd25", label: "Sep/Dec 2025", qs: [
+    { slug: "sd25-q1", name: "Mistral Co", section: "A" },
+    { slug: "sd25-q2", name: "Earps Co", section: "B" },
+    { slug: "sd25-q3", name: "Phoenix Co", section: "B" } ] },
+  { id: "mj25", label: "Mar/Jun 2025", qs: [
+    { slug: "mj25-q1", name: "Speed Style Co", section: "A" },
+    { slug: "mj25-q2", name: "Garda Group", section: "B" },
+    { slug: "mj25-q3", name: "Wolves Co", section: "B" } ] },
+  { id: "sd24", label: "Sep/Dec 2024", qs: [
+    { slug: "sd24-q1", name: "Hart Group", section: "A" },
+    { slug: "sd24-q2", name: "Bodeen Co", section: "B" },
+    { slug: "sd24-q3", name: "Oak Co", section: "B" } ] },
+  { id: "mj24", label: "Mar/Jun 2024", qs: [
+    { slug: "mj24-q1", name: "Magenta Group", section: "A" },
+    { slug: "mj24-q2", name: "Pickle & Co", section: "B" },
+    { slug: "mj24-q3", name: "Cuckoo Group", section: "B" } ] },
+  { id: "sd23", label: "Sep/Dec 2023", qs: [
+    { slug: "sd23-q1", name: "Hammer Co", section: "A" },
+    { slug: "sd23-q2", name: "Cottrell Co", section: "B" },
+    { slug: "sd23-q3", name: "Aster Co", section: "B" } ] },
+  { id: "mj23", label: "Mar/Jun 2023", qs: [
+    { slug: "mj23-q1", name: "Encore Co", section: "A" },
+    { slug: "mj23-q2", name: "Crawley Co", section: "B" },
+    { slug: "mj23-q3", name: "Slaindar Co", section: "B" } ] },
+  { id: "d22", label: "Dec 2022", qs: [
+    { slug: "d22-q1", name: "Mercurio Co", section: "A" },
+    { slug: "d22-q2", name: "Marlos Co", section: "B" },
+    { slug: "d22-q3", name: "Kobold Co", section: "B" } ] },
+  { id: "s22", label: "Sep 2022", qs: [
+    { slug: "s22-q1", name: "Winberry Co", section: "A" },
+    { slug: "s22-q2", name: "Geller Co", section: "B" },
+    { slug: "s22-q3", name: "Forsythia Co", section: "B" } ] },
+  { id: "spec", label: "Specimen (w.e.f. Sep 2022)", qs: [
+    { slug: "spec-q1", name: "Specimen Q1", section: "A" },
+    { slug: "spec-q2", name: "Specimen Q2", section: "B" },
+    { slug: "spec-q3", name: "Specimen Q3", section: "B" } ] }
+];
+const paperDefaults = (sec) => sec === "A"
+  ? { marks: 50, skillsMarks: 10, time: 98, reqs: [20, 12, 8] }
+  : { marks: 25, skillsMarks: 5, time: 49, reqs: [12, 8] };
+
+const AK = "aaa3:apikey";const AM = "aaa3:model";
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const MODEL_OPTIONS = [
   { id: "claude-sonnet-4-5", label: "Sonnet 4.5 — баланс цены и качества" },
@@ -546,6 +591,7 @@ export default function App() {
   const [improve, setImprove] = useState(null); // {qid, rid, text, busy}
   const [maBusy, setMaBusy] = useState(null);   // "qid:rid" пока грузится образцовый ответ
   const [hasKey, setHasKey] = useState(false);
+  const [addPreset, setAddPreset] = useState(null);
 
   const builtinQuestions = EXAMS.flatMap(e => e.questions);
   const allQuestions = [...builtinQuestions, ...customQs];
@@ -845,6 +891,10 @@ export default function App() {
             <button onClick={() => setView("gaps")}
               className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
               <ListChecks className="w-4 h-4" /> Пробелы
+            </button>
+            <button onClick={() => setView("papers")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
+              <Library className="w-4 h-4" /> Past papers
             </button>
             <button onClick={() => setView("settings")}
               className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
@@ -1362,6 +1412,70 @@ export default function App() {
     );
   }
 
+  /* ---------- PAST PAPERS ---------- */
+  if (view === "papers") {
+    const bySlug = {};
+    customQs.forEach(q => { if (q.paperSlug) bySlug[q.paperSlug] = q; });
+    const filled = Object.keys(bySlug).length;
+    return (
+      <div className="min-h-screen bg-stone-100 text-stone-900">
+        <div className="max-w-3xl mx-auto px-4 py-6 pb-16">
+          <button onClick={() => setView("home")} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+            <ChevronLeft className="w-4 h-4" /> Назад
+          </button>
+          <h2 className="font-serif text-3xl mt-2">Past papers ACCA</h2>
+          <p className="text-sm text-stone-600 mt-1 leading-relaxed">
+            Каталог реальных сессий. Тексты заданий принадлежат ACCA и в приложение не входят — открой вопрос
+            на ACCA Practice Platform, скопируй сценарий и требования и вставь сюда. Вставленное хранится
+            только в этом браузере; перенести на другое устройство можно через экспорт в настройках.
+          </p>
+          <p className="mt-2 font-mono text-xs text-stone-500">Заполнено: {filled} из 27</p>
+
+          <div className="mt-5 space-y-3">
+            {PAST_PAPERS.map(paper => (
+              <div key={paper.id} className="bg-white border border-stone-200 rounded-xl p-4">
+                <h3 className="font-serif text-lg">{paper.label}</h3>
+                <div className="mt-2 divide-y divide-stone-100 border border-stone-100 rounded-lg overflow-hidden">
+                  {paper.qs.map(pq => {
+                    const d = paperDefaults(pq.section);
+                    const q = bySlug[pq.slug];
+                    const best = q ? bestForKey("q:" + q.id) : null;
+                    return (
+                      <div key={pq.slug} className="flex items-center gap-2 px-3 py-2">
+                        <SectionTag section={pq.section} />
+                        <span className="text-sm flex-1 min-w-0 truncate">{pq.name}</span>
+                        <span className="font-mono text-xs text-stone-400">{d.marks}</span>
+                        {q ? (
+                          <>
+                            {best !== null && (
+                              <span className={"font-mono text-xs " + (best >= 50 ? "text-emerald-700" : "text-red-800")}>{best}%</span>
+                            )}
+                            <button onClick={() => openSession(descForQuestion(q))}
+                              className="inline-flex items-center gap-1 rounded-lg bg-red-800 text-white px-2.5 py-1.5 text-xs font-medium hover:bg-red-900">
+                              <PenLine className="w-3.5 h-3.5" /> Начать
+                            </button>
+                            <button onClick={() => deleteCustom(q.id)} className="p-1 text-stone-400 hover:text-red-800">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => { setAddPreset({ paperSlug: pq.slug, title: paper.label + " — " + pq.name, section: pq.section, ...d }); setView("add"); }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs hover:bg-stone-50">
+                            <Plus className="w-3.5 h-3.5" /> Вставить текст
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ---------- SETTINGS ---------- */
   if (view === "settings") {
     return <SettingsView
@@ -1443,12 +1557,14 @@ export default function App() {
   /* ---------- ADD CUSTOM QUESTION ---------- */
   if (view === "add") {
     return <AddQuestion
-      onBack={() => setView("home")}
+      preset={addPreset}
+      onBack={() => { const p = addPreset; setAddPreset(null); setView(p ? "papers" : "home"); }}
       onSave={async (q) => {
         const list = [...customQs, q];
         setCustomQs(list);
         await sSet(K.custom, list);
-        setView("home");
+        const p = addPreset; setAddPreset(null);
+        setView(p ? "papers" : "home");
       }}
     />;
   }
@@ -1458,13 +1574,13 @@ export default function App() {
 
 /* ---------------- add-question view ---------------- */
 
-function AddQuestion({ onBack, onSave }) {
-  const [title, setTitle] = useState("");
-  const [section, setSection] = useState("B");
+function AddQuestion({ onBack, onSave, preset }) {
+  const [title, setTitle] = useState(preset ? preset.title : "");
+  const [section, setSection] = useState(preset ? preset.section : "B");
   const [scenario, setScenario] = useState("");
-  const [reqs, setReqs] = useState([{ text: "", marks: 10 }, { text: "", marks: 10 }]);
-  const [skillsMarks, setSkillsMarks] = useState(5);
-  const [timeMin, setTimeMin] = useState("");
+  const [reqs, setReqs] = useState(preset ? preset.reqs.map(m => ({ text: "", marks: m })) : [{ text: "", marks: 10 }, { text: "", marks: 10 }]);
+  const [skillsMarks, setSkillsMarks] = useState(preset ? preset.skillsMarks : 5);
+  const [timeMin, setTimeMin] = useState(preset ? String(preset.time) : "");
   const [err, setErr] = useState("");
   const [genTopic, setGenTopic] = useState(GEN_TOPICS[0]);
   const [genBusy, setGenBusy] = useState(false);
@@ -1502,6 +1618,7 @@ function AddQuestion({ onBack, onSave }) {
     onSave({
       id: "c" + Date.now(),
       custom: true,
+      paperSlug: preset ? preset.paperSlug : undefined,
       section,
       marks: total,
       skillsMarks: Number(skillsMarks) || 0,
@@ -1518,13 +1635,15 @@ function AddQuestion({ onBack, onSave }) {
         <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
           <ChevronLeft className="w-4 h-4" /> Назад
         </button>
-        <h2 className="font-serif text-3xl mt-2">Свой вопрос</h2>
+        <h2 className="font-serif text-3xl mt-2">{preset ? preset.title : "Свой вопрос"}</h2>
         <p className="text-sm text-stone-600 mt-1">
-          Сюда удобно переносить реальные past papers из ACCA Practice Platform: вставьте сценарий и требования — платформа примет ответ на время и проверит.
+          {preset
+            ? "Откройте этот вопрос на ACCA Practice Platform, скопируйте сценарий целиком в поле ниже, затем впишите требования и баллы. Название, секция, баллы и время уже подставлены — при необходимости поправьте."
+            : "Сюда удобно переносить реальные past papers из ACCA Practice Platform: вставьте сценарий и требования — платформа примет ответ на время и проверит."}
         </p>
 
         <div className="mt-5 space-y-4">
-          <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className={"bg-white border border-stone-200 rounded-xl p-4 " + (preset ? "hidden" : "")}>
             <p className="text-xs uppercase tracking-widest text-red-800 font-semibold flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Сгенерировать ИИ
             </p>
@@ -1621,6 +1740,45 @@ function AddQuestion({ onBack, onSave }) {
 /* ---------------- settings view ---------------- */
 
 function SettingsView({ onBack, onChanged }) {
+  const [ioMsg, setIoMsg] = useState("");
+  const doExport = () => {
+    try {
+      const dump = {
+        v: 1, exported: new Date().toISOString(),
+        custom: JSON.parse(localStorage.getItem("aaa3:custom") || "[]"),
+        attempts: JSON.parse(localStorage.getItem("aaa3:attempts") || "[]"),
+        gaps: JSON.parse(localStorage.getItem("aaa3:gaps") || "{}")
+      };
+      const blob = new Blob([JSON.stringify(dump)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "aaa-exam-studio-backup.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setIoMsg("Файл выгружен. Ключ API в него не входит.");
+    } catch (e) { setIoMsg("Не удалось выгрузить: " + ((e && e.message) || e)); }
+  };
+  const doImport = (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(String(r.result));
+        const cur = JSON.parse(localStorage.getItem("aaa3:custom") || "[]");
+        const seen = new Set(cur.map(q => q.id));
+        const merged = cur.concat((d.custom || []).filter(q => !seen.has(q.id)));
+        localStorage.setItem("aaa3:custom", JSON.stringify(merged));
+        const curA = JSON.parse(localStorage.getItem("aaa3:attempts") || "[]");
+        const seenA = new Set(curA.map(x => x.id));
+        const mergedA = curA.concat((d.attempts || []).filter(x => !seenA.has(x.id)));
+        localStorage.setItem("aaa3:attempts", JSON.stringify(mergedA));
+        localStorage.setItem("aaa3:gaps", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("aaa3:gaps") || "{}"), d.gaps || {})));
+        setIoMsg("Загружено: вопросов " + (d.custom || []).length + ", попыток " + (d.attempts || []).length + ". Обнови страницу.");
+      } catch (e) { setIoMsg("Файл не распознан: " + ((e && e.message) || e)); }
+    };
+    r.readAsText(f);
+  };
   const [key, setKey] = useState(getApiKey());
   const [model, setModel] = useState(apiModel());
   const [saved, setSaved] = useState(false);
@@ -1692,6 +1850,25 @@ function SettingsView({ onBack, onChanged }) {
             <p className="text-xs text-stone-400 mt-2">
               Если модель устарела и API вернёт ошибку — впишите актуальное имя модели вручную (список в документации Anthropic).
             </p>
+          </div>
+
+          <div className="bg-white border border-stone-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Перенос на другое устройство</p>
+            <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+              Вставленные past papers, история попыток и список пробелов хранятся в этом браузере.
+              Выгрузите файл на одном устройстве и загрузите на другом. Ключ API в файл не попадает.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button onClick={doExport}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50">
+                <Download className="w-4 h-4" /> Выгрузить файл
+              </button>
+              <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-50 cursor-pointer">
+                <Upload className="w-4 h-4" /> Загрузить файл
+                <input type="file" accept="application/json,.json" onChange={doImport} className="hidden" />
+              </label>
+            </div>
+            {ioMsg && <p className="text-xs text-stone-600 mt-2">{ioMsg}</p>}
           </div>
 
           <button onClick={save}
