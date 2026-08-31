@@ -2254,6 +2254,24 @@ function buildNumberQuestions(seed) {
   });
   return out;
 }
+function buildRiskQuestions(seed) {
+  const out = [];
+  STANDARDS.forEach((st, i) => {
+    (st.risks || []).forEach((r, ri) => {
+      const others = shuffle(STANDARDS.filter(x => x.num !== st.num), seed + i * 31 + ri).slice(0, 3);
+      out.push({
+        kind: "risk",
+        std: st.num,
+        q: "Какой стандарт нарушен: " + r.act,
+        options: shuffle([st.num, ...others.map(o => o.num)], seed + i * 17 + ri + 3),
+        answer: st.num,
+        why: st.num + " " + st.title + ". " + r.effect
+      });
+    });
+  });
+  return out;
+}
+
 function buildContentQuestions() {
   const out = [];
   STANDARDS.forEach(s => {
@@ -2329,6 +2347,21 @@ function StandardsView({ onBack }) {
             </ul>
           </div>
 
+          {(std.risks || []).length > 0 && (
+            <div className="mt-4 bg-white border border-red-200 rounded-xl p-4">
+              <p className="text-xs uppercase tracking-widest text-red-800 font-semibold">Where companies go wrong</p>
+              <p className="text-xs text-stone-500 mt-1">Типичные нарушения, которые встречаются в экзаменационных сценариях</p>
+              <ul className="mt-3 space-y-3">
+                {std.risks.map((r, i) => (
+                  <li key={i} className="border-l-2 border-red-300 pl-3">
+                    <p className="text-sm leading-relaxed font-medium">{r.act}</p>
+                    <p className="text-sm text-stone-600 leading-relaxed mt-1">{r.effect}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <StandardQuiz std={std} onDone={() => markSeen(std.num)} />
         </div>
       </div>
@@ -2337,6 +2370,7 @@ function StandardsView({ onBack }) {
 
   if (mode === "test") return <StandardsTest onBack={() => setMode("library")} />;
   if (mode === "recall") return <NumberRecall onBack={() => setMode("library")} />;
+  if (mode === "risks") return <AllRisks onBack={() => setMode("library")} onOpen={(n) => { setMode("library"); setOpenNum(n); }} />;
 
   const card = (s) => (
     <button key={s.num} onClick={() => setOpenNum(s.num)}
@@ -2373,8 +2407,8 @@ function StandardsView({ onBack }) {
             <p className="font-mono text-xl font-semibold">{doneCount}</p>
           </div>
           <div className="bg-white border border-stone-200 rounded-lg p-3">
-            <p className="text-xs text-stone-500">Вопросов</p>
-            <p className="font-mono text-xl font-semibold">{STANDARDS.reduce((n, s) => n + s.quiz.length, 0) + STANDARDS.length * 2}</p>
+            <p className="text-xs text-stone-500">Нарушений</p>
+            <p className="font-mono text-xl font-semibold">{STANDARDS.reduce((n, s) => n + (s.risks || []).length, 0)}</p>
           </div>
         </div>
 
@@ -2386,6 +2420,10 @@ function StandardsView({ onBack }) {
           <button onClick={() => setMode("recall")}
             className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
             <PenLine className="w-4 h-4" /> Тренажёр номеров
+          </button>
+          <button onClick={() => setMode("risks")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
+            <AlertTriangle className="w-4 h-4" /> Все нарушения
           </button>
         </div>
 
@@ -2452,7 +2490,8 @@ function StandardsTest({ onBack }) {
     let pool = [];
     if (kind === "numbers") pool = buildNumberQuestions(seed);
     else if (kind === "content") pool = buildContentQuestions();
-    else pool = [...buildNumberQuestions(seed), ...buildContentQuestions()];
+    else if (kind === "risks") pool = buildRiskQuestions(seed);
+    else pool = [...buildNumberQuestions(seed), ...buildContentQuestions(), ...buildRiskQuestions(seed)];
     setItems(shuffle(pool, seed).slice(0, size));
     setI(0); setPicked(null); setLog([]);
   };
@@ -2468,7 +2507,7 @@ function StandardsTest({ onBack }) {
           <div className="mt-5 bg-white border border-stone-200 rounded-xl p-4">
             <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Что проверяем</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {[["numbers", "Только номера и названия"], ["content", "Только содержание"], ["mixed", "Всё вместе"]].map(([id, label]) => (
+              {[["numbers", "Номера и названия"], ["content", "Содержание"], ["risks", "Нарушения"], ["mixed", "Всё вместе"]].map(([id, label]) => (
                 <button key={id} onClick={() => setKind(id)}
                   className={"rounded-lg px-3 py-1.5 text-sm border " + (kind === id ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 hover:border-stone-500")}>
                   {label}
@@ -2549,7 +2588,7 @@ function StandardsTest({ onBack }) {
 
         <div className="mt-5 bg-white border border-stone-200 rounded-xl p-4">
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">
-            {it.kind === "content" ? "Содержание" : it.kind === "title" ? "Название стандарта" : "Номер стандарта"}
+            {it.kind === "content" ? "Содержание" : it.kind === "title" ? "Название стандарта" : it.kind === "risk" ? "Найди нарушенный стандарт" : "Номер стандарта"}
           </p>
           <p className="text-[15px] leading-relaxed mt-2">{it.q}</p>
           <div className="mt-3 space-y-1.5">
@@ -2642,6 +2681,55 @@ function NumberRecall({ onBack }) {
             {res === "no" && <span className="inline-flex items-center gap-1 text-red-800 text-sm"><XCircle className="w-4 h-4" /> Верный ответ: {std.num}</span>}
           </div>
           <p className="text-xs text-stone-500 mt-3">Засчитывается и «IAS 37», и «37» — важно попасть в семейство и номер.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AllRisks({ onBack, onOpen }) {
+  const [q, setQ] = useState("");
+  const t = q.trim().toLowerCase();
+  const groups = STANDARDS
+    .map(s => ({
+      std: s,
+      items: (s.risks || []).filter(r => !t || (s.num + " " + s.title + " " + r.act + " " + r.effect).toLowerCase().includes(t))
+    }))
+    .filter(g => g.items.length);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-stone-900">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+        <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+          <ChevronLeft className="w-4 h-4" /> К стандартам
+        </button>
+        <h2 className="font-serif text-3xl mt-2">Типичные нарушения</h2>
+        <p className="text-stone-600 mt-2 text-sm leading-relaxed">
+          То, что компании делают не так по каждому стандарту, и как это искажает отчётность. Читать перед экзаменом:
+          в сценарии почти всегда встречается один из этих сюжетов.
+        </p>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: revenue, provision, goodwill…"
+          className="mt-4 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500" />
+        <p className="font-mono text-xs text-stone-500 mt-2">{total} записей</p>
+
+        <div className="mt-4 space-y-4">
+          {groups.map(g => (
+            <div key={g.std.num} className="bg-white border border-stone-200 rounded-xl p-4">
+              <button onClick={() => onOpen(g.std.num)} className="flex items-center gap-2 text-left hover:opacity-70">
+                <span className="font-mono text-xs font-semibold bg-stone-900 text-white rounded px-1.5 py-0.5">{g.std.num}</span>
+                <span className="text-sm font-medium">{g.std.title}</span>
+              </button>
+              <ul className="mt-3 space-y-3">
+                {g.items.map((r, i) => (
+                  <li key={i} className="border-l-2 border-red-300 pl-3">
+                    <p className="text-sm leading-relaxed font-medium">{r.act}</p>
+                    <p className="text-sm text-stone-600 leading-relaxed mt-1">{r.effect}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </div>
     </div>
