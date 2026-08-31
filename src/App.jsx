@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, PenLine, Timer, ArrowRight, BookOpen,
   Sparkles, RefreshCw, ListChecks, KeyRound, Library, Download, Upload, FileUp, Highlighter, Pause, Play
 } from "lucide-react";
+import { STANDARDS } from "./data/standards.js";
 
 /* ============================================================
    AAA EXAM STUDIO — тренажёр ACCA Advanced Audit & Assurance
@@ -1017,6 +1018,10 @@ export default function App() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
               <ListChecks className="w-4 h-4" /> Пробелы
             </button>
+            <button onClick={() => setView("standards")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
+              <BookOpen className="w-4 h-4" /> Стандарты
+            </button>
             <button onClick={() => setView("papers")}
               className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
               <Library className="w-4 h-4" /> Past papers
@@ -1666,6 +1671,8 @@ export default function App() {
   }
 
   /* ---------- GAPS ---------- */
+  if (view === "standards") return <StandardsView onBack={() => setView("home")} />;
+
   if (view === "gaps") {
     const items = [];
     attempts.forEach(at => {
@@ -2180,6 +2187,461 @@ function SettingsView({ onBack, onChanged }) {
             Ответы, история попыток и черновики тоже хранятся локально в браузере этого устройства.
             Ориентир стоимости: проверка одного полного экзамена — порядка 10 запросов к модели.
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   СТАНДАРТЫ: справочник IFRS/IAS + тренажёр номеров и содержания
+   ============================================================ */
+const SK = "aaa3:standards";
+
+function normNum(s) {
+  return (s || "")
+    .toUpperCase()
+    .replace(/[®\s.]/g, "")
+    .replace(/^IAS/, "IAS ")
+    .replace(/^IFRS/, "IFRS ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function numMatches(input, target) {
+  const a = normNum(input);
+  const b = normNum(target);
+  if (!a) return false;
+  if (a === b) return true;
+  // допускаем ввод одной цифры, если в базе только один стандарт с таким номером
+  const digitsA = a.replace(/[^0-9]/g, "");
+  const digitsB = b.replace(/[^0-9]/g, "");
+  if (!digitsA) return false;
+  const family = a.startsWith("IAS") || a.startsWith("IFRS");
+  return !family && digitsA === digitsB;
+}
+function shuffle(arr, seed) {
+  const a = [...arr];
+  let s = seed || 1;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* Генерация вопросов на знание номеров — из самих данных, поэтому покрывают все 30 стандартов */
+function buildNumberQuestions(seed) {
+  const out = [];
+  STANDARDS.forEach((s, i) => {
+    const others = shuffle(STANDARDS.filter(x => x.num !== s.num), seed + i).slice(0, 3);
+    out.push({
+      kind: "number",
+      std: s.num,
+      q: "Какой стандарт регулирует это: " + s.scope,
+      options: shuffle([s.num, ...others.map(o => o.num)], seed + i + 7),
+      answer: s.num,
+      why: s.num + " — " + s.title + "."
+    });
+    out.push({
+      kind: "title",
+      std: s.num,
+      q: "Как называется " + s.num + "?",
+      options: shuffle([s.title, ...others.map(o => o.title)], seed + i + 13),
+      answer: s.title,
+      why: s.num + " — " + s.title + ". " + s.scope
+    });
+  });
+  return out;
+}
+function buildContentQuestions() {
+  const out = [];
+  STANDARDS.forEach(s => {
+    (s.quiz || []).forEach((qq, qi) => {
+      out.push({
+        kind: "content",
+        std: s.num,
+        q: qq.q,
+        options: qq.options,
+        answer: qq.options[qq.correct],
+        why: qq.why,
+        key: s.num + ":" + qi
+      });
+    });
+  });
+  return out;
+}
+
+function StandardsView({ onBack }) {
+  const [mode, setMode] = useState("library"); // library | test | recall
+  const [openNum, setOpenNum] = useState(null);
+  const [seen, setSeen] = useState({});
+  const [q, setQ] = useState("");
+
+  useEffect(() => { sGet(SK, {}).then(v => setSeen(v || {})); }, []);
+  const markSeen = async (num) => {
+    const next = { ...seen, [num]: true };
+    setSeen(next);
+    await sSet(SK, next);
+  };
+
+  const std = STANDARDS.find(s => s.num === openNum);
+  const ias = STANDARDS.filter(s => s.num.startsWith("IAS"));
+  const ifrs = STANDARDS.filter(s => !s.num.startsWith("IAS"));
+  const filt = (list) => {
+    const t = q.trim().toLowerCase();
+    if (!t) return list;
+    return list.filter(s => (s.num + " " + s.title + " " + s.scope).toLowerCase().includes(t));
+  };
+
+  if (std) {
+    return (
+      <div className="min-h-screen bg-stone-100 text-stone-900">
+        <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+          <button onClick={() => setOpenNum(null)} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+            <ChevronLeft className="w-4 h-4" /> К списку стандартов
+          </button>
+          <p className="font-mono text-sm text-red-800 font-semibold mt-3">{std.num}</p>
+          <h2 className="font-serif text-3xl mt-1">{std.title}</h2>
+          <p className="text-stone-600 mt-2 text-sm leading-relaxed">{std.scope}</p>
+
+          <div className="mt-5 bg-white border border-stone-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">The rule</p>
+            <ul className="mt-2 space-y-2">
+              {std.rule.map((r, i) => (
+                <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                  <span className="font-mono text-xs text-red-800 mt-0.5">{i + 1}</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold">Audit angle</p>
+            <ul className="mt-2 space-y-2">
+              {std.audit.map((r, i) => (
+                <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <StandardQuiz std={std} onDone={() => markSeen(std.num)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "test") return <StandardsTest onBack={() => setMode("library")} />;
+  if (mode === "recall") return <NumberRecall onBack={() => setMode("library")} />;
+
+  const card = (s) => (
+    <button key={s.num} onClick={() => setOpenNum(s.num)}
+      className="text-left bg-white border border-stone-200 rounded-xl p-3 hover:border-stone-400 transition-colors">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-xs font-semibold bg-stone-900 text-white rounded px-1.5 py-0.5">{s.num}</span>
+        {seen[s.num] && <CheckCircle2 className="w-4 h-4 text-emerald-600 ml-auto" />}
+      </div>
+      <p className="font-medium text-sm mt-1.5 leading-snug">{s.title}</p>
+    </button>
+  );
+
+  const doneCount = STANDARDS.filter(s => seen[s.num]).length;
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-stone-900">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+        <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+          <ChevronLeft className="w-4 h-4" /> Назад
+        </button>
+        <h2 className="font-serif text-3xl mt-2">Стандарты IFRS и IAS</h2>
+        <p className="text-stone-600 mt-2 text-sm leading-relaxed">
+          30 стандартов, которые реально проверяются на AAA: суть на языке экзамена, аудиторский угол и вопросы на
+          проверку. Тест отдельно гоняет и номера стандартов, и их содержание.
+        </p>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="bg-white border border-stone-200 rounded-lg p-3">
+            <p className="text-xs text-stone-500">Стандартов</p>
+            <p className="font-mono text-xl font-semibold">{STANDARDS.length}</p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-3">
+            <p className="text-xs text-stone-500">Пройдено</p>
+            <p className="font-mono text-xl font-semibold">{doneCount}</p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-3">
+            <p className="text-xs text-stone-500">Вопросов</p>
+            <p className="font-mono text-xl font-semibold">{STANDARDS.reduce((n, s) => n + s.quiz.length, 0) + STANDARDS.length * 2}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button onClick={() => setMode("test")}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 text-white px-3 py-1.5 text-sm hover:bg-stone-700">
+            <ListChecks className="w-4 h-4" /> Тест по стандартам
+          </button>
+          <button onClick={() => setMode("recall")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50">
+            <PenLine className="w-4 h-4" /> Тренажёр номеров
+          </button>
+        </div>
+
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: impairment, IAS 37, provision…"
+          className="mt-4 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500" />
+
+        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-5">IAS</p>
+        <div className="mt-2 grid sm:grid-cols-2 gap-2">{filt(ias).map(card)}</div>
+        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-6">IFRS и Conceptual Framework</p>
+        <div className="mt-2 grid sm:grid-cols-2 gap-2">{filt(ifrs).map(card)}</div>
+      </div>
+    </div>
+  );
+}
+
+function StandardQuiz({ std, onDone }) {
+  const [picked, setPicked] = useState({});
+  const all = std.quiz.every((_, i) => picked[i] !== undefined);
+  useEffect(() => { if (all) onDone(); }, [all]);
+  return (
+    <div className="mt-6">
+      <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Проверь себя</p>
+      <div className="mt-2 space-y-3">
+        {std.quiz.map((qq, qi) => (
+          <div key={qi} className="bg-white border border-stone-200 rounded-xl p-4">
+            <p className="text-sm leading-relaxed">{qq.q}</p>
+            <div className="mt-2.5 space-y-1.5">
+              {qq.options.map((o, oi) => {
+                const answered = picked[qi] !== undefined;
+                const right = oi === qq.correct;
+                const chosen = picked[qi] === oi;
+                const cls = !answered
+                  ? "border-stone-200 hover:border-stone-400"
+                  : right ? "border-emerald-500 bg-emerald-50"
+                  : chosen ? "border-red-400 bg-red-50" : "border-stone-200 opacity-60";
+                return (
+                  <button key={oi} onClick={() => setPicked({ ...picked, [qi]: oi })}
+                    className={"w-full text-left border rounded-lg px-3 py-2 text-sm transition-colors " + cls}>
+                    {o}
+                  </button>
+                );
+              })}
+            </div>
+            {picked[qi] !== undefined && (
+              <p className="mt-2.5 text-sm text-stone-600 border-t border-stone-200 pt-2.5">{qq.why}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StandardsTest({ onBack }) {
+  const [kind, setKind] = useState("mixed"); // numbers | content | mixed
+  const [size, setSize] = useState(15);
+  const [items, setItems] = useState(null);
+  const [i, setI] = useState(0);
+  const [picked, setPicked] = useState(null);
+  const [log, setLog] = useState([]);
+
+  const start = () => {
+    const seed = Math.floor(Math.random() * 100000) + 1;
+    let pool = [];
+    if (kind === "numbers") pool = buildNumberQuestions(seed);
+    else if (kind === "content") pool = buildContentQuestions();
+    else pool = [...buildNumberQuestions(seed), ...buildContentQuestions()];
+    setItems(shuffle(pool, seed).slice(0, size));
+    setI(0); setPicked(null); setLog([]);
+  };
+
+  if (!items) {
+    return (
+      <div className="min-h-screen bg-stone-100 text-stone-900">
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+            <ChevronLeft className="w-4 h-4" /> К стандартам
+          </button>
+          <h2 className="font-serif text-3xl mt-2">Тест по стандартам</h2>
+          <div className="mt-5 bg-white border border-stone-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Что проверяем</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[["numbers", "Только номера и названия"], ["content", "Только содержание"], ["mixed", "Всё вместе"]].map(([id, label]) => (
+                <button key={id} onClick={() => setKind(id)}
+                  className={"rounded-lg px-3 py-1.5 text-sm border " + (kind === id ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 hover:border-stone-500")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-4">Сколько вопросов</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[10, 15, 25, 40].map(n => (
+                <button key={n} onClick={() => setSize(n)}
+                  className={"rounded-lg px-3 py-1.5 text-sm border font-mono " + (size === n ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 hover:border-stone-500")}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <button onClick={start} className="mt-5 w-full rounded-lg bg-red-800 text-white py-2.5 text-sm font-medium hover:bg-red-700">
+              Начать
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (i >= items.length) {
+    const right = log.filter(l => l.ok).length;
+    const pct = Math.round((right / items.length) * 100);
+    const wrong = log.filter(l => !l.ok);
+    return (
+      <div className="min-h-screen bg-stone-100 text-stone-900">
+        <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+          <h2 className="font-serif text-3xl">Результат</h2>
+          <p className={"font-mono text-4xl font-semibold mt-2 " + (pct >= 70 ? "text-emerald-700" : "text-red-800")}>{pct}%</p>
+          <p className="text-sm text-stone-600 mt-1">{right} из {items.length} верно</p>
+          {wrong.length > 0 && (
+            <>
+              <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-6">Разобрать</p>
+              <div className="mt-2 space-y-2">
+                {wrong.map((w, k) => (
+                  <div key={k} className="bg-white border border-stone-200 rounded-xl p-3">
+                    <p className="font-mono text-xs text-red-800">{w.std}</p>
+                    <p className="text-sm mt-1">{w.q}</p>
+                    <p className="text-sm text-stone-600 mt-1.5">Верно: <span className="text-stone-900">{w.answer}</span></p>
+                    <p className="text-sm text-stone-600 mt-1">{w.why}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="mt-6 flex gap-2">
+            <button onClick={() => setItems(null)} className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-700">Ещё раз</button>
+            <button onClick={onBack} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50">К стандартам</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const it = items[i];
+  const next = () => {
+    setLog([...log, { ...it, ok: picked === it.answer }]);
+    setPicked(null);
+    setI(i + 1);
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-stone-900">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+            <ChevronLeft className="w-4 h-4" /> Выйти
+          </button>
+          <span className="ml-auto font-mono text-sm text-stone-500">{i + 1} / {items.length}</span>
+        </div>
+        <div className="mt-3 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+          <div className="h-full bg-red-800" style={{ width: ((i / items.length) * 100) + "%" }} />
+        </div>
+
+        <div className="mt-5 bg-white border border-stone-200 rounded-xl p-4">
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">
+            {it.kind === "content" ? "Содержание" : it.kind === "title" ? "Название стандарта" : "Номер стандарта"}
+          </p>
+          <p className="text-[15px] leading-relaxed mt-2">{it.q}</p>
+          <div className="mt-3 space-y-1.5">
+            {it.options.map((o, oi) => {
+              const answered = picked !== null;
+              const right = o === it.answer;
+              const chosen = picked === o;
+              const cls = !answered
+                ? "border-stone-200 hover:border-stone-400"
+                : right ? "border-emerald-500 bg-emerald-50"
+                : chosen ? "border-red-400 bg-red-50" : "border-stone-200 opacity-60";
+              return (
+                <button key={oi} disabled={answered} onClick={() => setPicked(o)}
+                  className={"w-full text-left border rounded-lg px-3 py-2 text-sm transition-colors " + cls}>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+          {picked !== null && (
+            <>
+              <p className="mt-3 text-sm text-stone-600 border-t border-stone-200 pt-3">{it.why}</p>
+              <button onClick={next} className="mt-3 w-full rounded-lg bg-stone-900 text-white py-2 text-sm hover:bg-stone-700">
+                Дальше
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NumberRecall({ onBack }) {
+  const [order, setOrder] = useState(() => shuffle(STANDARDS.map(s => s.num), Math.floor(Math.random() * 99999) + 1));
+  const [i, setI] = useState(0);
+  const [val, setVal] = useState("");
+  const [res, setRes] = useState(null);
+  const [score, setScore] = useState({ ok: 0, no: 0 });
+
+  const std = STANDARDS.find(s => s.num === order[i]);
+
+  if (!std) {
+    const total = score.ok + score.no;
+    return (
+      <div className="min-h-screen bg-stone-100 text-stone-900">
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <h2 className="font-serif text-3xl">Готово</h2>
+          <p className="font-mono text-4xl font-semibold mt-2">{total ? Math.round((score.ok / total) * 100) : 0}%</p>
+          <p className="text-sm text-stone-600 mt-1">{score.ok} из {total} номеров названы верно</p>
+          <div className="mt-6 flex gap-2">
+            <button onClick={() => { setOrder(shuffle(STANDARDS.map(s => s.num), Math.floor(Math.random() * 99999) + 1)); setI(0); setScore({ ok: 0, no: 0 }); setRes(null); setVal(""); }}
+              className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-700">Ещё раз</button>
+            <button onClick={onBack} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-50">К стандартам</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const check = () => {
+    const ok = numMatches(val, std.num);
+    setRes(ok ? "ok" : "no");
+    setScore(s => ({ ok: s.ok + (ok ? 1 : 0), no: s.no + (ok ? 0 : 1) }));
+  };
+  const next = () => { setI(i + 1); setVal(""); setRes(null); };
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-stone-900">
+      <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900">
+            <ChevronLeft className="w-4 h-4" /> Выйти
+          </button>
+          <span className="ml-auto font-mono text-sm text-stone-500">{i + 1} / {order.length}</span>
+        </div>
+        <h2 className="font-serif text-2xl mt-3">Назови номер стандарта</h2>
+        <div className="mt-4 bg-white border border-stone-200 rounded-xl p-4">
+          <p className="font-serif text-xl leading-snug">{std.title}</p>
+          <p className="text-sm text-stone-600 mt-2 leading-relaxed">{std.scope}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <input value={val} onChange={e => setVal(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && (res ? next() : check())}
+              disabled={!!res} placeholder="напр. IAS 37"
+              className="w-44 rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-stone-500 disabled:bg-stone-50" />
+            {!res
+              ? <button onClick={check} className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-700">Проверить</button>
+              : <button onClick={next} className="rounded-lg bg-stone-900 text-white px-3 py-2 text-sm hover:bg-stone-700">Дальше</button>}
+            {res === "ok" && <span className="inline-flex items-center gap-1 text-emerald-700 text-sm"><CheckCircle2 className="w-4 h-4" /> Верно</span>}
+            {res === "no" && <span className="inline-flex items-center gap-1 text-red-800 text-sm"><XCircle className="w-4 h-4" /> Верный ответ: {std.num}</span>}
+          </div>
+          <p className="text-xs text-stone-500 mt-3">Засчитывается и «IAS 37», и «37» — важно попасть в семейство и номер.</p>
         </div>
       </div>
     </div>
