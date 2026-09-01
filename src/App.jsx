@@ -2202,8 +2202,7 @@ function normNum(s) {
   return (s || "")
     .toUpperCase()
     .replace(/[®\s.]/g, "")
-    .replace(/^IAS/, "IAS ")
-    .replace(/^IFRS/, "IFRS ")
+    .replace(/^(IFRS|ISQM|ISAE|ISRE|ISRS|ISA|IAS)/, "$1 ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -2216,7 +2215,7 @@ function numMatches(input, target) {
   const digitsA = a.replace(/[^0-9]/g, "");
   const digitsB = b.replace(/[^0-9]/g, "");
   if (!digitsA) return false;
-  const family = a.startsWith("IAS") || a.startsWith("IFRS");
+  const family = /^(IAS|IFRS|ISA|ISQM|ISAE|ISRE|ISRS)/.test(a);
   return !family && digitsA === digitsB;
 }
 function shuffle(arr, seed) {
@@ -2304,8 +2303,9 @@ function StandardsView({ onBack }) {
   };
 
   const std = STANDARDS.find(s => s.num === openNum);
-  const ias = STANDARDS.filter(s => s.num.startsWith("IAS"));
-  const ifrs = STANDARDS.filter(s => !s.num.startsWith("IAS"));
+  const ias = STANDARDS.filter(s => s.family !== "ISA" && s.num.startsWith("IAS"));
+  const ifrs = STANDARDS.filter(s => s.family !== "ISA" && !s.num.startsWith("IAS"));
+  const isa = STANDARDS.filter(s => s.family === "ISA");
   const filt = (list) => {
     const t = q.trim().toLowerCase();
     if (!t) return list;
@@ -2336,7 +2336,7 @@ function StandardsView({ onBack }) {
           </div>
 
           <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold">Audit angle</p>
+            <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold">{std.family === "ISA" ? "How this is examined" : "Audit angle"}</p>
             <ul className="mt-2 space-y-2">
               {std.audit.map((r, i) => (
                 <li key={i} className="flex gap-2 text-sm leading-relaxed">
@@ -2349,7 +2349,7 @@ function StandardsView({ onBack }) {
 
           {(std.risks || []).length > 0 && (
             <div className="mt-4 bg-white border border-red-200 rounded-xl p-4">
-              <p className="text-xs uppercase tracking-widest text-red-800 font-semibold">Where companies go wrong</p>
+              <p className="text-xs uppercase tracking-widest text-red-800 font-semibold">{std.family === "ISA" ? "Where audit teams go wrong" : "Where companies go wrong"}</p>
               <p className="text-xs text-stone-500 mt-1">Типичные нарушения, которые встречаются в экзаменационных сценариях</p>
               <ul className="mt-3 space-y-3">
                 {std.risks.map((r, i) => (
@@ -2393,8 +2393,9 @@ function StandardsView({ onBack }) {
         </button>
         <h2 className="font-serif text-3xl mt-2">Стандарты IFRS и IAS</h2>
         <p className="text-stone-600 mt-2 text-sm leading-relaxed">
-          30 стандартов, которые реально проверяются на AAA: суть на языке экзамена, аудиторский угол и вопросы на
-          проверку. Тест отдельно гоняет и номера стандартов, и их содержание.
+          Стандарты отчётности (IFRS и IAS) и стандарты аудита (ISA, ISQM и прочие задания): суть на языке экзамена,
+          типичные нарушения и вопросы на проверку. Тест отдельно гоняет номера, названия, содержание и умение
+          опознать нарушенный стандарт.
         </p>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -2434,6 +2435,8 @@ function StandardsView({ onBack }) {
         <div className="mt-2 grid sm:grid-cols-2 gap-2">{filt(ias).map(card)}</div>
         <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-6">IFRS и Conceptual Framework</p>
         <div className="mt-2 grid sm:grid-cols-2 gap-2">{filt(ifrs).map(card)}</div>
+        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-6">ISA, ISQM и прочие задания</p>
+        <div className="mt-2 grid sm:grid-cols-2 gap-2">{filt(isa).map(card)}</div>
       </div>
     </div>
   );
@@ -2478,7 +2481,8 @@ function StandardQuiz({ std, onDone }) {
 }
 
 function StandardsTest({ onBack }) {
-  const [kind, setKind] = useState("mixed"); // numbers | content | mixed
+  const [kind, setKind] = useState("mixed"); // numbers | content | risks | mixed
+  const [fam, setFam] = useState("all"); // all | IFRS | ISA
   const [size, setSize] = useState(15);
   const [items, setItems] = useState(null);
   const [i, setI] = useState(0);
@@ -2492,6 +2496,10 @@ function StandardsTest({ onBack }) {
     else if (kind === "content") pool = buildContentQuestions();
     else if (kind === "risks") pool = buildRiskQuestions(seed);
     else pool = [...buildNumberQuestions(seed), ...buildContentQuestions(), ...buildRiskQuestions(seed)];
+    if (fam !== "all") {
+      const allow = new Set(STANDARDS.filter(s => (fam === "ISA" ? s.family === "ISA" : s.family !== "ISA")).map(s => s.num));
+      pool = pool.filter(p => allow.has(p.std));
+    }
     setItems(shuffle(pool, seed).slice(0, size));
     setI(0); setPicked(null); setLog([]);
   };
@@ -2510,6 +2518,15 @@ function StandardsTest({ onBack }) {
               {[["numbers", "Номера и названия"], ["content", "Содержание"], ["risks", "Нарушения"], ["mixed", "Всё вместе"]].map(([id, label]) => (
                 <button key={id} onClick={() => setKind(id)}
                   className={"rounded-lg px-3 py-1.5 text-sm border " + (kind === id ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 hover:border-stone-500")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mt-4">По каким стандартам</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[["all", "Все"], ["IFRS", "Только IFRS и IAS"], ["ISA", "Только ISA"]].map(([id, label]) => (
+                <button key={id} onClick={() => setFam(id)}
+                  className={"rounded-lg px-3 py-1.5 text-sm border " + (fam === id ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 hover:border-stone-500")}>
                   {label}
                 </button>
               ))}
