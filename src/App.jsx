@@ -1120,8 +1120,15 @@ export default function App() {
             )}
           </div>
 
+          <a href="./consolidation.html"
+            className="mt-8 block bg-white border border-teal-200 rounded-xl p-4 hover:border-teal-500">
+            <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">Для работы</p>
+            <h3 className="font-serif text-lg mt-0.5">Consolidation Studio — практика консолидации</h3>
+            <p className="text-sm text-stone-600 mt-1">Уроки от IFRS 10 и гудвила до трансформации НСБУ → МСФО и закрытия месяца в холдинге, пошаговые кейсы и ИИ-наставник.</p>
+          </a>
+
           <a href="./afm.html"
-            className="mt-8 block bg-white border border-indigo-200 rounded-xl p-4 hover:border-indigo-400">
+            className="mt-3 block bg-white border border-indigo-200 rounded-xl p-4 hover:border-indigo-400">
             <p className="text-xs uppercase tracking-widest text-indigo-700 font-semibold">Следующий экзамен</p>
             <h3 className="font-serif text-lg mt-0.5">AFM Trainer — восстановление базы FM</h3>
             <p className="text-sm text-stone-600 mt-1">Короткие уроки с расчётами: дисконтирование, налог и инфляция в DCF, CAPM, WACC, бета активов.</p>

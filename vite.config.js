@@ -10,7 +10,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, "index.html"),
-        afm: resolve(__dirname, "afm.html")
+        afm: resolve(__dirname, "afm.html"),
+        consolidation: resolve(__dirname, "consolidation.html")
       }
     }
   }
