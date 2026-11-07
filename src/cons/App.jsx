@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { UNITS } from "./lessons/index.js";
+import { UNITS, TRACKS } from "./lessons/index.js";
+import { EXCEL_FUNCS, DAX_FUNCS } from "./funcs.js";
 import { CASES } from "./cases.js";
 import { GLOSSARY } from "./glossary.js";
 import { AK, AM, DEFAULT_MODEL, getKey, getModel, load, save, callClaude, parseNum, fmt, extractJson, TUTOR_SYSTEM, GEN_PROMPT } from "./ai.js";
 import {
-  ChevronLeft, CheckCircle2, XCircle, Loader2, Sparkles, RotateCcw, Flame, Trophy, ArrowRight, KeyRound,
+  ChevronLeft, Code2, CheckCircle2, XCircle, Loader2, Sparkles, RotateCcw, Flame, Trophy, ArrowRight, KeyRound,
   Lightbulb, Eye, Search, Send, Trash2, Wand2, BookOpen, Briefcase, Library, MessageCircle, Settings, GraduationCap, X
 } from "lucide-react";
 
 /* ---------- ключи прогресса ---------- */
 const PK = "cons:progress", SK = "cons:srs", CK = "cons:cases", STK = "cons:streak", CHK = "cons:chat", GK = "cons:gencases";
-const ALL = UNITS.flatMap((u, ui) => u.lessons.map(l => ({ ...l, unit: u.id, unitTitle: u.title, unitNo: ui + 1 })));
+const ALL = TRACKS.flatMap(t => t.units.flatMap((u, ui) => u.lessons.map(l => ({ ...l, unit: u.id, unitTitle: u.title, unitNo: ui + 1, track: t.id, trackTitle: t.title }))));
 const today = () => new Date().toISOString().slice(0, 10);
 const LEVELS = { 1: "Базовый", 2: "Средний", 3: "Продвинутый" };
 const nb = x => typeof x === "string" ? x.replace(/(\d) (?=\d{3}(?!\d))/g, "$1\u00a0") : x;
@@ -73,6 +74,7 @@ function Theory({ blocks }) {
             <div className="mt-1.5 space-y-1">{b.ex.lines.map((x, j) => <p key={j} className="text-sm font-mono leading-relaxed whitespace-pre-wrap text-stone-800">{nb(x)}</p>)}</div>
           </div>
         );
+        if (b.code) return <pre key={i} className="rounded-lg bg-stone-900 text-stone-100 p-3.5 text-[13px] leading-relaxed overflow-x-auto font-mono whitespace-pre">{b.code}</pre>;
         if (b.tip) return <div key={i} className="rounded-lg bg-teal-50 border border-teal-200 p-3.5 text-sm leading-relaxed"><span className="font-semibold text-teal-900">На практике. </span>{nb(b.tip)}</div>;
         if (b.warn) return <div key={i} className="rounded-lg bg-amber-50 border border-amber-200 p-3.5 text-sm leading-relaxed"><span className="font-semibold text-amber-900">Ловушка. </span>{nb(b.warn)}</div>;
         return null;
@@ -119,6 +121,8 @@ function SettingsModal({ onClose }) {
 /* ============================================================ */
 export default function ConsApp() {
   const [tab, setTab] = useState("course");
+  const [track, setTrack] = useState(() => load("cons:track", "cons"));
+  const pickTrack = t => { setTrack(t); save("cons:track", t); };
   const [view, setView] = useState("home");
   const [progress, setProgress] = useState(() => load(PK, {}));
   const [srs, setSrs] = useState(() => load(SK, {}));
@@ -163,7 +167,7 @@ export default function ConsApp() {
 
   if (view === "lesson" && lesson)
     return <LessonView lesson={lesson} onBack={() => setView("home")} onFinish={finishLesson} onAsk={openTutor}
-      onNext={() => { const i = ALL.findIndex(x => x.id === lesson.id); if (ALL[i + 1]) setLesson(ALL[i + 1]); else setView("home"); }} />;
+      onNext={() => { const i = ALL.findIndex(x => x.id === lesson.id); if (ALL[i + 1] && ALL[i + 1].track === lesson.track) setLesson(ALL[i + 1]); else setView("home"); }} />;
   if (view === "case" && cs)
     return <CaseView c={cs} onBack={() => setView("home")} onFinish={finishCase} />;
 
@@ -171,11 +175,14 @@ export default function ConsApp() {
   const avg = doneL.length ? Math.round(doneL.reduce((s, l) => s + progress[l.id].best, 0) / doneL.length) : 0;
   const doneC = CASES.filter(c => caseProg[c.id] && caseProg[c.id].done).length;
   const due = ALL.filter(l => srs[l.id] && srs[l.id].dueAt <= Date.now());
-  const nextL = ALL.find(l => !(progress[l.id] && progress[l.id].done));
+  const curTrack = TRACKS.find(t => t.id === track) || TRACKS[0];
+  const trackAll = ALL.filter(l => l.track === curTrack.id);
+  const nextL = trackAll.find(l => !(progress[l.id] && progress[l.id].done));
 
   const tabs = [
     { id: "course", label: "Курс", icon: BookOpen },
     { id: "cases", label: "Кейсы", icon: Briefcase },
+    { id: "funcs", label: "Функции", icon: Code2 },
     { id: "glossary", label: "Глоссарий", icon: Library },
     { id: "tutor", label: "Наставник", icon: MessageCircle }
   ];
@@ -185,14 +192,14 @@ export default function ConsApp() {
       <div className="max-w-3xl mx-auto px-4 pt-8 pb-24">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">IFRS 10 · IFRS 3 · IAS 28 · IAS 21 · НСБУ → МСФО</p>
+            <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">МСФО · НСБУ → МСФО · Excel · Power BI</p>
             <h1 className="font-serif text-4xl mt-1">Consolidation Studio</h1>
           </div>
           <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg hover:bg-stone-200 text-stone-600" title="Настройки"><Settings className="w-5 h-5" /></button>
         </div>
         <p className="text-stone-600 mt-2 text-sm leading-relaxed max-w-2xl">
-          Практический курс консолидации для работы в холдинге: {UNITS.length} модулей, {ALL.length} уроков, {ALL.reduce((s, l) => s + l.qs.length, 0)} заданий
-          и {CASES.length} пошаговых кейсов с проверкой каждого шага. От контроля и гудвила до трансформации НСБУ → МСФО и закрытия месяца.
+          Практика для работы в холдинге: три курса — консолидация по МСФО, Excel для финансиста и Power BI с нуля ({ALL.length} уроков, {ALL.reduce((s, l) => s + l.qs.length, 0)} заданий),
+          {" "}{CASES.length} пошаговых кейсов с проверкой каждого шага, справочник функций Excel и DAX и ИИ-наставник.
         </p>
 
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -220,14 +227,27 @@ export default function ConsApp() {
         <div className="mt-6 flex gap-1 bg-stone-200/70 rounded-xl p-1 sticky top-2 z-20">
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={"flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium " + (tab === t.id ? "bg-white shadow-sm text-stone-900" : "text-stone-600 hover:text-stone-900")}>
-              <t.icon className="w-4 h-4" /><span className="hidden sm:inline">{t.label}</span><span className="sm:hidden text-xs">{t.label}</span>
+              className={"flex-1 min-w-0 inline-flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 rounded-lg py-1.5 sm:py-2 text-sm font-medium " + (tab === t.id ? "bg-white shadow-sm text-stone-900" : "text-stone-600 hover:text-stone-900")}>
+              <t.icon className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">{t.label}</span><span className="sm:hidden text-[10px] leading-tight truncate max-w-full">{t.label}</span>
             </button>
           ))}
         </div>
 
         {tab === "course" && (
           <div className="mt-5 space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              {TRACKS.map(t => {
+                const ls = ALL.filter(l => l.track === t.id), d = ls.filter(l => progress[l.id] && progress[l.id].done).length;
+                return (
+                  <button key={t.id} onClick={() => pickTrack(t.id)}
+                    className={"rounded-xl border p-3 text-left " + (curTrack.id === t.id ? "border-teal-700 bg-teal-50 ring-1 ring-teal-700" : "border-stone-200 bg-white hover:border-stone-400")}>
+                    <p className="text-sm font-semibold leading-tight">{t.short}</p>
+                    <p className="font-mono text-xs text-stone-500 mt-1">{d}/{ls.length}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-sm text-stone-600">{curTrack.subtitle}</p>
             {(nextL || due.length > 0) && (
               <div className="grid sm:grid-cols-2 gap-2">
                 {nextL && (
@@ -246,7 +266,7 @@ export default function ConsApp() {
                 )}
               </div>
             )}
-            {UNITS.map((u, ui) => {
+            {curTrack.units.map((u, ui) => {
               const done = u.lessons.filter(l => progress[l.id] && progress[l.id].done).length;
               return (
                 <Card key={u.id} className="p-4">
@@ -279,6 +299,8 @@ export default function ConsApp() {
 
         {tab === "cases" && <CasesTab caseProg={caseProg} genCases={genCases} setGenCases={setGenCases}
           open={c => { setCs(c); setView("case"); }} needKey={() => setShowSettings(true)} />}
+
+        {tab === "funcs" && <FuncsTab />}
 
         {tab === "glossary" && <GlossaryTab />}
 
@@ -337,7 +359,7 @@ function LessonView({ lesson, onBack, onFinish, onNext, onAsk }) {
       <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
         <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-stone-200 text-stone-600"><ChevronLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-stone-500 truncate">Модуль {lesson.unitNo}. {lesson.unitTitle}</p>
+          <p className="text-xs text-stone-500 truncate">{lesson.trackTitle} · Модуль {lesson.unitNo}. {lesson.unitTitle}</p>
           {pct !== undefined && <div className="mt-1 h-1.5 rounded-full bg-stone-200"><div className="h-1.5 rounded-full bg-teal-700 transition-all" style={{ width: pct + "%" }} /></div>}
         </div>
         {phase === "quiz" && <span className="font-mono text-xs text-stone-500">{qi + 1}/{lesson.qs.length}</span>}
@@ -644,6 +666,60 @@ function CaseView({ c, onBack, onFinish }) {
 }
 
 /* ============================================================ */
+function FuncsTab() {
+  const [kind, setKind] = useState("excel");
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
+  const rows = kind === "excel" ? EXCEL_FUNCS : DAX_FUNCS;
+  const catIdx = kind === "excel" ? 2 : 1;
+  const cats = [...new Set(rows.map(r => r[catIdx]))];
+  const list = rows.filter(r => (!cat || r[catIdx] === cat) && (!q.trim() || r.join(" ").toLowerCase().includes(q.trim().toLowerCase())));
+  return (
+    <div className="mt-5">
+      <div className="flex gap-1.5">
+        {[["excel", "Excel (" + EXCEL_FUNCS.length + ")"], ["dax", "Power BI · DAX (" + DAX_FUNCS.length + ")"]].map(([k, l]) => (
+          <button key={k} onClick={() => { setKind(k); setCat(""); }} className={"rounded-full px-3 py-1.5 text-sm font-medium border " + (kind === k ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300")}>{l}</button>
+        ))}
+      </div>
+      {kind === "excel" && <p className="text-xs text-stone-500 mt-2">Русское и английское имя функции. В русской версии Excel разделитель аргументов — «;», в английской — «,».</p>}
+      <div className="relative mt-3">
+        <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: функция, задача, пример"
+          className="w-full rounded-lg border border-stone-300 pl-9 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white" />
+      </div>
+      <div className="mt-2 flex gap-1.5 flex-wrap">
+        <button onClick={() => setCat("")} className={"rounded-full px-2.5 py-0.5 text-xs border " + (!cat ? "bg-teal-800 text-white border-teal-800" : "bg-white border-stone-300")}>Все</button>
+        {cats.map(c => <button key={c} onClick={() => setCat(c)} className={"rounded-full px-2.5 py-0.5 text-xs border " + (cat === c ? "bg-teal-800 text-white border-teal-800" : "bg-white border-stone-300")}>{c}</button>)}
+      </div>
+      <div className="mt-3 space-y-2">
+        {list.map(r => kind === "excel" ? (
+          <Card key={r[0]} className="p-3.5">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="font-mono font-semibold text-teal-900">{r[1]}</span>
+              <span className="font-mono text-sm text-stone-500">{r[0]}</span>
+              <span className="text-[11px] rounded-full px-2 py-0.5 bg-stone-100 text-stone-600 ml-auto">{r[2]}</span>
+            </div>
+            <p className="text-sm text-stone-700 mt-1">{r[4]}</p>
+            <p className="font-mono text-xs text-stone-500 mt-1">{r[1]}{r[3]}</p>
+            <p className="font-mono text-xs bg-stone-50 border border-stone-200 rounded px-2 py-1 mt-1.5 overflow-x-auto whitespace-nowrap">{r[5]}</p>
+          </Card>
+        ) : (
+          <Card key={r[0]} className="p-3.5">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="font-mono font-semibold text-teal-900">{r[0]}</span>
+              <span className="text-[11px] rounded-full px-2 py-0.5 bg-stone-100 text-stone-600 ml-auto">{r[1]}</span>
+            </div>
+            <p className="text-sm text-stone-700 mt-1">{r[3]}</p>
+            <p className="font-mono text-xs text-stone-500 mt-1">{r[2]}</p>
+            <p className="font-mono text-xs bg-stone-50 border border-stone-200 rounded px-2 py-1 mt-1.5 overflow-x-auto whitespace-nowrap">{r[4]}</p>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ */
 function GlossaryTab() {
   const [q, setQ] = useState("");
   const list = useMemo(() => {
@@ -703,7 +779,9 @@ function TutorTab({ seed, clearSeed, needKey }) {
     "Объясни на примере, как исключить внутригрупповые проценты по займу в долларах между дочками с разной функциональной валютой.",
     "Маркетплейс: агент или принципал по IFRS 15? Какие признаки проверять?",
     "Составь мне чек-лист первой недели консолидатора в новом холдинге.",
-    "Как построить матрицу внутригрупповой сверки в Excel?"
+    "Как построить матрицу внутригрупповой сверки в Excel?",
+    "Объясни с нуля, чем мера отличается от вычисляемого столбца в Power BI, на примере выручки группы.",
+    "Помоги собрать в Power BI P&L группы с колонками «Сумма компаний», «Элиминации», «Группа»."
   ];
 
   return (
@@ -712,7 +790,7 @@ function TutorTab({ seed, clearSeed, needKey }) {
         <div className="flex items-start gap-3">
           <GraduationCap className="w-6 h-6 text-teal-800 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-medium">Наставник по консолидации</p>
+            <p className="font-medium">Наставник: консолидация, Excel, Power BI</p>
             <p className="text-sm text-stone-600 leading-relaxed mt-0.5">Задавайте любые вопросы: по стандартам, по задаче из кейса, по рабочей ситуации. Наставник знает узбекский контекст (НСБУ, сум, холдинговые структуры), но цифры законодательства лучше перепроверять.</p>
           </div>
           {msgs.length > 0 && <button onClick={clear} className="p-1.5 text-stone-400 hover:text-red-700" title="Очистить"><Trash2 className="w-4 h-4" /></button>}
