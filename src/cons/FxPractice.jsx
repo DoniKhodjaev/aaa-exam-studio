@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FX_TASKS, FX_CATS } from "./fxtasks.js";
+import { FX_TASKS, FX_CATS, FX_CAT_ORDER } from "./fxtasks.js";
 import { callClaude, getKey, TUTOR_SYSTEM, load, save } from "./ai.js";
 import { ChevronLeft, CheckCircle2, XCircle, Loader2, Sparkles, Lightbulb, Eye, ArrowRight, AlertTriangle, RotateCcw } from "lucide-react";
 
@@ -21,7 +21,7 @@ const show = (v, fmtKind) => {
   if (typeof v === "boolean") return v ? "ИСТИНА" : "ЛОЖЬ";
   if (typeof v === "number") {
     if (fmtKind === "date" && v > 30000) { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5); return d.toISOString().slice(0, 10).split("-").reverse().join("."); }
-    if (fmtKind === "pct" && Math.abs(v) <= 1) return (Math.round(v * 10000) / 100).toString().replace(".", ",") + "%";
+    if (fmtKind === "pct" && Math.abs(v) <= 1) return (Math.round(v * 10000) / 100).toString().replace(".", ",").replace("-", "−") + "%";
     if (Math.abs(v) < 1 && v !== 0 && fmtKind !== "pct") return String(Math.round(v * 10000) / 10000).replace(".", ",");
     const r = Math.round(v * 100) / 100;
     let [i, fr] = Math.abs(r).toFixed(Math.abs(r - Math.round(r)) < 1e-9 ? 0 : 2).split(".");
@@ -83,7 +83,7 @@ export function FxList({ open }) {
       </p>
       <p className="font-mono text-xs text-stone-500 mt-2">Решено: {done}/{FX_TASKS.length}</p>
       <div className="mt-3 space-y-4">
-        {FX_CATS.map((cat, ci) => {
+        {FX_CAT_ORDER.map(ci => { const cat = FX_CATS[ci];
           const list = FX_TASKS.filter(t => t.cat === ci);
           return (
             <div key={cat} className="bg-white border border-stone-200 rounded-xl p-4">

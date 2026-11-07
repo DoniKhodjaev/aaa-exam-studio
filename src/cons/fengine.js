@@ -12,7 +12,9 @@ const RU_EN = {
   "КОНМЕСЯЦА": "EOMONTH", "ДАТАМЕС": "EDATE", "ДАТА": "DATE", "ГОД": "YEAR", "МЕСЯЦ": "MONTH", "ДЕНЬ": "DAY", "ДОЛЯГОДА": "YEARFRAC",
   "ЧИСТРАБДНИ": "NETWORKDAYS", "РАБДЕНЬ": "WORKDAY",
   "ЧПС": "NPV", "ЧИСТНЗ": "XNPV", "ВСД": "IRR", "ПЛТ": "PMT", "ПС": "PV", "БС": "FV", "ПРПЛТ": "IPMT", "ОСПЛТ": "PPMT", "СТАВКА": "RATE",
-  "ОКРУГЛ": "ROUND", "ОКРУГЛВВЕРХ": "ROUNDUP", "ОКРУГЛВНИЗ": "ROUNDDOWN", "ABS": "ABS", "СТЕПЕНЬ": "POWER",
+  "ОКРУГЛ": "ROUND", "ОКРУГЛВВЕРХ": "ROUNDUP", "ОКРУГЛВНИЗ": "ROUNDDOWN", "ОКРУГЛТ": "MROUND", "ABS": "ABS", "СТЕПЕНЬ": "POWER",
+  "ЦЕЛОЕ": "INT", "ОТБР": "TRUNC", "ОСТАТ": "MOD", "ЧАСТНОЕ": "QUOTIENT", "КОРЕНЬ": "SQRT", "ПРОИЗВЕД": "PRODUCT", "ЗНАК": "SIGN",
+  "ОКРВВЕРХ": "CEILING", "ОКРВНИЗ": "FLOOR", "МЕДИАНА": "MEDIAN", "СРГЕОМ": "GEOMEAN", "НАИБОЛЬШИЙ": "LARGE", "НАИМЕНЬШИЙ": "SMALL", "LN": "LN", "EXP": "EXP",
   "ОБЪЕДИНИТЬ": "TEXTJOIN", "СЦЕП": "CONCATENATE", "СЦЕПИТЬ": "CONCATENATE", "ТЕКСТ": "TEXT", "ЗНАЧЕН": "VALUE", "ЗНАЧ": "VALUE",
   "СЖПРОБЕЛЫ": "TRIM", "ПОДСТАВИТЬ": "SUBSTITUTE", "ЛЕВСИМВ": "LEFT", "ПРАВСИМВ": "RIGHT", "ПСТР": "MID", "ДЛСТР": "LEN", "ПОИСК": "SEARCH", "НАЙТИ": "FIND"
 };
@@ -22,7 +24,8 @@ const EN_RU = {
   IF: "ЕСЛИ", IFS: "ЕСЛИМН", SWITCH: "ПЕРЕКЛЮЧ", IFERROR: "ЕСЛИОШИБКА", IFNA: "ЕСНД", AND: "И", OR: "ИЛИ", NOT: "НЕ", CHOOSE: "ВЫБОР",
   FILTER: "ФИЛЬТР", UNIQUE: "УНИК", SORT: "СОРТ", EOMONTH: "КОНМЕСЯЦА", EDATE: "ДАТАМЕС", DATE: "ДАТА", YEAR: "ГОД", MONTH: "МЕСЯЦ", DAY: "ДЕНЬ", YEARFRAC: "ДОЛЯГОДА",
   NETWORKDAYS: "ЧИСТРАБДНИ", WORKDAY: "РАБДЕНЬ", NPV: "ЧПС", IRR: "ВСД", PMT: "ПЛТ", PV: "ПС", FV: "БС", IPMT: "ПРПЛТ", PPMT: "ОСПЛТ",
-  ROUND: "ОКРУГЛ", ABS: "ABS", TEXTJOIN: "ОБЪЕДИНИТЬ", TEXT: "ТЕКСТ", VALUE: "ЗНАЧЕН", TRIM: "СЖПРОБЕЛЫ", SUBSTITUTE: "ПОДСТАВИТЬ", LEFT: "ЛЕВСИМВ", RIGHT: "ПРАВСИМВ", LEN: "ДЛСТР",
+  ROUND: "ОКРУГЛ", ROUNDUP: "ОКРУГЛВВЕРХ", ROUNDDOWN: "ОКРУГЛВНИЗ", MROUND: "ОКРУГЛТ", INT: "ЦЕЛОЕ", TRUNC: "ОТБР", MOD: "ОСТАТ", QUOTIENT: "ЧАСТНОЕ",
+  POWER: "СТЕПЕНЬ", SQRT: "КОРЕНЬ", PRODUCT: "ПРОИЗВЕД", SIGN: "ЗНАК", CEILING: "ОКРВВЕРХ", FLOOR: "ОКРВНИЗ", MEDIAN: "МЕДИАНА", GEOMEAN: "СРГЕОМ", LARGE: "НАИБОЛЬШИЙ", SMALL: "НАИМЕНЬШИЙ", ABS: "ABS", TEXTJOIN: "ОБЪЕДИНИТЬ", TEXT: "ТЕКСТ", VALUE: "ЗНАЧЕН", TRIM: "СЖПРОБЕЛЫ", SUBSTITUTE: "ПОДСТАВИТЬ", LEFT: "ЛЕВСИМВ", RIGHT: "ПРАВСИМВ", LEN: "ДЛСТР",
   TRUE: "ИСТИНА", FALSE: "ЛОЖЬ"
 };
 
@@ -50,7 +53,7 @@ export function toEN(formula) {
   const outside = ps.filter(p => !p.s).map(p => p.t).join(" ");
   let ru = outside.includes(";") || /[А-ЯЁа-яё][А-ЯЁа-яё0-9XХ.]*\s*\(/.test(outside);
   const commas = (outside.match(/,/g) || []).length, decs = (outside.match(/(?<![A-Za-z$.]\d*)\d,\d/g) || []).length;
-  if (!ru && commas > 0 && commas === decs) ru = true;
+  if (!ru && commas > 0 && commas === decs && !/[A-Za-z_][A-Za-z0-9_.]*\s*\(/.test(outside)) ru = true;
   const unknown = [];
   const en = ps.map(p => {
     if (p.s) return p.t;
@@ -114,7 +117,6 @@ function run(data, target, fill, enFormula) {
     const p = parseAddr(a);
     out[a] = { v: hf.getCellValue({ sheet: 0, ...p }), f: hf.getCellFormula({ sheet: 0, ...p }) };
   });
-  hf.destroy();
   return out;
 }
 
