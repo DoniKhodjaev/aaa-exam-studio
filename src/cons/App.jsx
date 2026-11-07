@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { UNITS, TRACKS } from "./lessons/index.js";
 import { EXCEL_FUNCS, DAX_FUNCS } from "./funcs.js";
+import { FxList, FxTaskView, FX_TASKS } from "./FxPractice.jsx";
 import { CASES } from "./cases.js";
 import { GLOSSARY } from "./glossary.js";
 import { AK, AM, DEFAULT_MODEL, getKey, getModel, load, save, callClaude, parseNum, fmt, extractJson, TUTOR_SYSTEM, GEN_PROMPT } from "./ai.js";
@@ -133,6 +134,7 @@ export default function ConsApp() {
   const [cs, setCs] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [tutorSeed, setTutorSeed] = useState("");
+  const [fx, setFx] = useState(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [view, tab, lesson, cs]);
 
@@ -168,6 +170,9 @@ export default function ConsApp() {
   if (view === "lesson" && lesson)
     return <LessonView lesson={lesson} onBack={() => setView("home")} onFinish={finishLesson} onAsk={openTutor}
       onNext={() => { const i = ALL.findIndex(x => x.id === lesson.id); if (ALL[i + 1] && ALL[i + 1].track === lesson.track) setLesson(ALL[i + 1]); else setView("home"); }} />;
+  if (view === "fx" && fx)
+    return <FxTaskView task={fx} onBack={() => setView("home")}
+      onNext={() => { const i = FX_TASKS.findIndex(t => t.id === fx.id); if (FX_TASKS[i + 1]) setFx(FX_TASKS[i + 1]); else setView("home"); }} />;
   if (view === "case" && cs)
     return <CaseView c={cs} onBack={() => setView("home")} onFinish={finishCase} />;
 
@@ -182,7 +187,7 @@ export default function ConsApp() {
   const tabs = [
     { id: "course", label: "Курс", icon: BookOpen },
     { id: "cases", label: "Кейсы", icon: Briefcase },
-    { id: "funcs", label: "Функции", icon: Code2 },
+    { id: "funcs", label: "Формулы", icon: Code2 },
     { id: "glossary", label: "Глоссарий", icon: Library },
     { id: "tutor", label: "Наставник", icon: MessageCircle }
   ];
@@ -300,7 +305,7 @@ export default function ConsApp() {
         {tab === "cases" && <CasesTab caseProg={caseProg} genCases={genCases} setGenCases={setGenCases}
           open={c => { setCs(c); setView("case"); }} needKey={() => setShowSettings(true)} />}
 
-        {tab === "funcs" && <FuncsTab />}
+        {tab === "funcs" && <FormulasTab openFx={t => { setFx(t); setView("fx"); }} />}
 
         {tab === "glossary" && <GlossaryTab />}
 
@@ -666,6 +671,21 @@ function CaseView({ c, onBack, onFinish }) {
 }
 
 /* ============================================================ */
+function FormulasTab({ openFx }) {
+  const [sub, setSub] = useState(() => load("cons:fxsub", "practice"));
+  const pick = v => { setSub(v); save("cons:fxsub", v); };
+  return (
+    <div className="mt-5">
+      <div className="flex gap-1 bg-white border border-stone-200 rounded-xl p-1">
+        {[["practice", "Практика на задачах (" + FX_TASKS.length + ")"], ["ref", "Справочник функций"]].map(([k, l]) => (
+          <button key={k} onClick={() => pick(k)} className={"flex-1 rounded-lg py-2 text-sm font-medium " + (sub === k ? "bg-teal-800 text-white" : "text-stone-600 hover:text-stone-900")}>{l}</button>
+        ))}
+      </div>
+      <div className="mt-4">{sub === "practice" ? <FxList open={openFx} /> : <FuncsTab />}</div>
+    </div>
+  );
+}
+
 function FuncsTab() {
   const [kind, setKind] = useState("excel");
   const [q, setQ] = useState("");
@@ -675,7 +695,7 @@ function FuncsTab() {
   const cats = [...new Set(rows.map(r => r[catIdx]))];
   const list = rows.filter(r => (!cat || r[catIdx] === cat) && (!q.trim() || r.join(" ").toLowerCase().includes(q.trim().toLowerCase())));
   return (
-    <div className="mt-5">
+    <div>
       <div className="flex gap-1.5">
         {[["excel", "Excel (" + EXCEL_FUNCS.length + ")"], ["dax", "Power BI · DAX (" + DAX_FUNCS.length + ")"]].map(([k, l]) => (
           <button key={k} onClick={() => { setKind(k); setCat(""); }} className={"rounded-full px-3 py-1.5 text-sm font-medium border " + (kind === k ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300")}>{l}</button>

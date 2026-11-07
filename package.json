@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "hyperformula": "^3.5.0",
     "lucide-react": "^0.469.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^18.3.1",
