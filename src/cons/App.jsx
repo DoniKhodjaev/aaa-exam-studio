@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
+const Cheats = lazy(() => import("./Cheats.jsx"));
 import { UNITS, TRACKS } from "./lessons/index.js";
 import { EXCEL_FUNCS, DAX_FUNCS } from "./funcs.js";
 import { FxList, FxTaskView, FX_TASKS } from "./FxPractice.jsx";
@@ -195,19 +196,19 @@ export default function ConsApp() {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <div className="max-w-3xl mx-auto px-4 pt-8 pb-24">
-        <div className="flex items-start justify-between gap-3">
+        <div className="no-print flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">МСФО · НСБУ → МСФО · Excel · Power BI</p>
             <h1 className="font-serif text-4xl mt-1">Consolidation Studio</h1>
           </div>
           <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg hover:bg-stone-200 text-stone-600" title="Настройки"><Settings className="w-5 h-5" /></button>
         </div>
-        <p className="text-stone-600 mt-2 text-sm leading-relaxed max-w-2xl">
+        <p className="no-print text-stone-600 mt-2 text-sm leading-relaxed max-w-2xl">
           Практика для работы в холдинге: три курса — консолидация по МСФО, Excel для финансиста и Power BI с нуля ({ALL.length} уроков, {ALL.reduce((s, l) => s + l.qs.length, 0)} заданий),
           {" "}{CASES.length} пошаговых кейсов с проверкой каждого шага, справочник функций Excel и DAX и ИИ-наставник.
         </p>
 
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="no-print mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             ["Уроки", doneL.length + "/" + ALL.length, BookOpen],
             ["Средний балл", avg + "%", Trophy],
@@ -222,14 +223,14 @@ export default function ConsApp() {
         </div>
 
         {!getKey() && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2.5">
+          <div className="no-print mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2.5">
             <KeyRound className="w-4 h-4 text-amber-600 shrink-0" />
             <span className="text-sm flex-1">Уроки и кейсы работают без ключа. Наставник, разборы ошибок и генератор кейсов включатся после ввода API-ключа.</span>
             <Btn kind="ghost" onClick={() => setShowSettings(true)} className="shrink-0">Ввести</Btn>
           </div>
         )}
 
-        <div className="mt-6 flex gap-1 bg-stone-200/70 rounded-xl p-1 sticky top-2 z-20">
+        <div className="no-print mt-6 flex gap-1 bg-stone-200/70 rounded-xl p-1 sticky top-2 z-20">
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={"flex-1 min-w-0 inline-flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 rounded-lg py-1.5 sm:py-2 text-sm font-medium " + (tab === t.id ? "bg-white shadow-sm text-stone-900" : "text-stone-600 hover:text-stone-900")}>
@@ -311,7 +312,7 @@ export default function ConsApp() {
 
         {tab === "tutor" && <TutorTab seed={tutorSeed} clearSeed={() => setTutorSeed("")} needKey={() => setShowSettings(true)} />}
 
-        <div className="mt-10 flex items-center justify-between text-sm">
+        <div className="no-print mt-10 flex items-center justify-between text-sm">
           <a href="./" className="text-stone-500 hover:text-stone-900">← К платформе AAA</a>
           <span className="text-xs text-stone-400">Прогресс хранится в этом браузере</span>
         </div>
@@ -672,16 +673,16 @@ function CaseView({ c, onBack, onFinish }) {
 
 /* ============================================================ */
 function FormulasTab({ openFx }) {
-  const [sub, setSub] = useState(() => load("cons:fxsub", "practice"));
+  const [sub, setSub] = useState(() => load("cons:fxsub", "cheats"));
   const pick = v => { setSub(v); save("cons:fxsub", v); };
   return (
     <div className="mt-5">
-      <div className="flex gap-1 bg-white border border-stone-200 rounded-xl p-1">
-        {[["practice", "Практика на задачах (" + FX_TASKS.length + ")"], ["ref", "Справочник функций"]].map(([k, l]) => (
-          <button key={k} onClick={() => pick(k)} className={"flex-1 rounded-lg py-2 text-sm font-medium " + (sub === k ? "bg-teal-800 text-white" : "text-stone-600 hover:text-stone-900")}>{l}</button>
+      <div className="no-print flex gap-1 bg-white border border-stone-200 rounded-xl p-1">
+        {[["cheats", "Шпаргалки МСФО", "Шпаргалки"], ["practice", "Практика Excel (" + FX_TASKS.length + ")", "Практика"], ["ref", "Справочник функций", "Справочник"]].map(([k, l, sh]) => (
+          <button key={k} onClick={() => pick(k)} className={"flex-1 rounded-lg py-2 px-1 text-sm font-medium " + (sub === k ? "bg-teal-800 text-white" : "text-stone-600 hover:text-stone-900")}><span className="hidden sm:inline">{l}</span><span className="sm:hidden">{sh}</span></button>
         ))}
       </div>
-      <div className="mt-4">{sub === "practice" ? <FxList open={openFx} /> : <FuncsTab />}</div>
+      <div className="mt-4">{sub === "cheats" ? <Suspense fallback={<p className="text-sm text-stone-500">Загрузка…</p>}><Cheats /></Suspense> : sub === "practice" ? <FxList open={openFx} /> : <FuncsTab />}</div>
     </div>
   );
 }

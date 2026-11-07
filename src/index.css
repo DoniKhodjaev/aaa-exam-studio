@@ -1,3 +1,14 @@
 @import "tailwindcss";
 
 html { background: #f5f5f4; }
+
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #fff !important; }
+  .break-inside-avoid { break-inside: avoid; }
+}
+
+@media (max-width: 640px) {
+  .katex-display > .katex { font-size: 1em; }
+}
+.katex-display { margin: 0.4em 0 !important; }
