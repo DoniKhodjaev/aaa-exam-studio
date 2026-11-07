@@ -61,7 +61,7 @@ export default function Cheats() {
               <h3 className="font-serif text-xl">{g.title}</h3>
               <span className="text-[11px] font-mono text-stone-500">{g.std}</span>
             </div>
-            <div className="mt-2 space-y-3">
+            <div className="mt-2 grid lg:grid-cols-2 gap-3 items-start">
               {g.cards.map(c => {
                 const hidden = quiz && !open[c.id];
                 return (

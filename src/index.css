@@ -12,3 +12,11 @@ html { background: #f5f5f4; }
   .katex-display > .katex { font-size: 1em; }
 }
 .katex-display { margin: 0.4em 0 !important; }
+
+/* iPad / iPhone: без автозума при фокусе на поле ввода и с учётом безопасных зон */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select { font-size: 16px !important; }
+}
+@media (display-mode: standalone) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}

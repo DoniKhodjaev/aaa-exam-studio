@@ -89,6 +89,26 @@ function AiBox({ text }) {
   return <p className="mt-2 text-sm leading-relaxed bg-white rounded-lg p-3 border border-stone-200 whitespace-pre-wrap">{text}</p>;
 }
 
+/* ---------- установка на iPad ---------- */
+function InstallHint() {
+  const [hide, setHide] = useState(() => load("cons:installHint", false));
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const ios = /iPad|iPhone|iPod/.test(ua) || (typeof navigator !== "undefined" && navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = typeof window !== "undefined" && (window.navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
+  if (hide || !ios || standalone) return null;
+  return (
+    <div className="no-print mt-4 bg-white border border-teal-200 rounded-xl p-3.5 flex gap-3">
+      <img src="./cons/apple-touch-icon.png" alt="" className="w-11 h-11 rounded-xl shrink-0" />
+      <div className="text-sm leading-relaxed flex-1">
+        <p className="font-medium">Установите как приложение на iPad</p>
+        <p className="text-stone-600 mt-0.5">В Safari нажмите «Поделиться» (квадрат со стрелкой) → «На экран „Домой“». Приложение откроется на весь экран и будет работать без интернета (кроме ИИ-наставника).</p>
+        <p className="text-stone-500 text-xs mt-1">В приложении свой прогресс и свои настройки: API-ключ нужно будет ввести ещё раз.</p>
+      </div>
+      <button onClick={() => { setHide(true); save("cons:installHint", true); }} className="p-1 text-stone-400 hover:text-stone-700 self-start"><X className="w-4 h-4" /></button>
+    </div>
+  );
+}
+
 /* ---------- настройки ---------- */
 function SettingsModal({ onClose }) {
   const [key, setKey] = useState(getKey());
@@ -195,7 +215,7 @@ export default function ConsApp() {
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
-      <div className="max-w-3xl mx-auto px-4 pt-8 pb-24">
+      <div className="max-w-3xl lg:max-w-5xl mx-auto px-4 lg:px-8 pt-8 pb-24">
         <div className="no-print flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">МСФО · НСБУ → МСФО · Excel · Power BI</p>
@@ -205,7 +225,7 @@ export default function ConsApp() {
         </div>
         <p className="no-print text-stone-600 mt-2 text-sm leading-relaxed max-w-2xl">
           Практика для работы в холдинге: три курса — консолидация по МСФО, Excel для финансиста и Power BI с нуля ({ALL.length} уроков, {ALL.reduce((s, l) => s + l.qs.length, 0)} заданий),
-          {" "}{CASES.length} пошаговых кейсов с проверкой каждого шага, справочник функций Excel и DAX и ИИ-наставник.
+          {" "}{CASES.length} пошаговых кейсов, практика формул Excel на {FX_TASKS.length} задачах, шпаргалки формул консолидации, справочник функций и ИИ-наставник.
         </p>
 
         <div className="no-print mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -229,6 +249,8 @@ export default function ConsApp() {
             <Btn kind="ghost" onClick={() => setShowSettings(true)} className="shrink-0">Ввести</Btn>
           </div>
         )}
+
+        <InstallHint />
 
         <div className="no-print mt-6 flex gap-1 bg-stone-200/70 rounded-xl p-1 sticky top-2 z-20">
           {tabs.map(t => (
@@ -272,7 +294,7 @@ export default function ConsApp() {
                 )}
               </div>
             )}
-            {curTrack.units.map((u, ui) => {
+            <div className="grid lg:grid-cols-2 gap-4 items-start">{curTrack.units.map((u, ui) => {
               const done = u.lessons.filter(l => progress[l.id] && progress[l.id].done).length;
               return (
                 <Card key={u.id} className="p-4">
@@ -299,7 +321,7 @@ export default function ConsApp() {
                   </div>
                 </Card>
               );
-            })}
+            })}</div>
           </div>
         )}
 
@@ -362,7 +384,7 @@ function LessonView({ lesson, onBack, onFinish, onNext, onAsk }) {
 
   const Header = ({ pct }) => (
     <div className="sticky top-0 bg-stone-100/95 backdrop-blur border-b border-stone-200 z-10">
-      <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
         <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-stone-200 text-stone-600"><ChevronLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-stone-500 truncate">{lesson.trackTitle} · Модуль {lesson.unitNo}. {lesson.unitTitle}</p>
@@ -376,7 +398,7 @@ function LessonView({ lesson, onBack, onFinish, onNext, onAsk }) {
   if (phase === "theory") return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <Header />
-      <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
+      <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-6 pb-20">
         <p className="text-xs uppercase tracking-widest text-teal-800 font-semibold">Теория</p>
         <h1 className="font-serif text-3xl mt-1">{lesson.title}</h1>
         <Card className="p-5 mt-4"><Theory blocks={lesson.theory} /></Card>
@@ -411,7 +433,7 @@ function LessonView({ lesson, onBack, onFinish, onNext, onAsk }) {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <Header pct={Math.round(qi / lesson.qs.length * 100)} />
-      <div className="max-w-3xl mx-auto px-4 py-5 pb-20">
+      <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-5 pb-20">
         <Card className="p-5">
           <p className="text-[15px] leading-relaxed">{nb(q.q)}</p>
           {q.t === "mcq" ? (
@@ -511,7 +533,7 @@ function CasesTab({ caseProg, genCases, setGenCases, open, needKey }) {
           <button key={l} onClick={() => setLvl(l)} className={"rounded-full px-3 py-1 text-xs font-medium border " + (lvl === l ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300 text-stone-700")}>{l ? LEVELS[l] : "Все"}</button>
         ))}
       </div>
-      <div className="mt-3 space-y-2">{list.map(c => <Row key={c.id} c={c} />)}</div>
+      <div className="mt-3 grid lg:grid-cols-2 gap-2">{list.map(c => <Row key={c.id} c={c} />)}</div>
 
       <Card className="mt-6 p-4 border-amber-200">
         <p className="text-xs uppercase tracking-widest text-amber-800 font-semibold flex items-center gap-1"><Wand2 className="w-3.5 h-3.5" /> Новый кейс от ИИ</p>
@@ -526,7 +548,7 @@ function CasesTab({ caseProg, genCases, setGenCases, open, needKey }) {
           <Btn onClick={generate} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {busy ? "Составляю…" : "Создать"}</Btn>
         </div>
         {err && <p className="text-sm text-red-700 mt-2">{err}</p>}
-        {genCases.length > 0 && <div className="mt-4 space-y-2">{genCases.map(c => <Row key={c.id} c={c} onDel={del} />)}</div>}
+        {genCases.length > 0 && <div className="mt-4 grid lg:grid-cols-2 gap-2">{genCases.map(c => <Row key={c.id} c={c} onDel={del} />)}</div>}
       </Card>
     </div>
   );
@@ -580,7 +602,7 @@ function CaseView({ c, onBack, onFinish }) {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <div className="sticky top-0 bg-stone-100/95 backdrop-blur border-b border-stone-200 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-stone-200 text-stone-600"><ChevronLeft className="w-5 h-5" /></button>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-stone-500 truncate">{c.title}</p>
@@ -589,7 +611,7 @@ function CaseView({ c, onBack, onFinish }) {
           <span className="font-mono text-xs text-stone-500">{Math.min(si + 1, c.steps.length)}/{c.steps.length}</span>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 py-6 pb-24">
+      <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-6 pb-24">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-teal-50 text-teal-800">{LEVELS[c.level] || "Кейс"}</span>
           {c.ai && <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-50 text-amber-800">Составлен ИИ — перепроверяйте ответы</span>}
@@ -712,7 +734,7 @@ function FuncsTab() {
         <button onClick={() => setCat("")} className={"rounded-full px-2.5 py-0.5 text-xs border " + (!cat ? "bg-teal-800 text-white border-teal-800" : "bg-white border-stone-300")}>Все</button>
         {cats.map(c => <button key={c} onClick={() => setCat(c)} className={"rounded-full px-2.5 py-0.5 text-xs border " + (cat === c ? "bg-teal-800 text-white border-teal-800" : "bg-white border-stone-300")}>{c}</button>)}
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 grid lg:grid-cols-2 gap-2 items-start">
         {list.map(r => kind === "excel" ? (
           <Card key={r[0]} className="p-3.5">
             <div className="flex items-baseline gap-2 flex-wrap">
@@ -755,7 +777,7 @@ function GlossaryTab() {
           className="w-full rounded-lg border border-stone-300 pl-9 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white" />
       </div>
       <p className="text-xs text-stone-500 mt-2">{list.length} терминов</p>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 grid lg:grid-cols-2 gap-2 items-start">
         {list.map(([ru, en, d]) => (
           <Card key={ru} className="p-3.5">
             <p className="font-medium">{ru} <span className="text-stone-400 font-normal">·</span> <span className="text-teal-800 font-normal italic">{en}</span></p>

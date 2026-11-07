@@ -82,7 +82,7 @@ export function FxList({ open }) {
         Можно писать по-русски (СУММЕСЛИМН, разделитель «;») или по-английски (SUMIFS, «,»).
       </p>
       <p className="font-mono text-xs text-stone-500 mt-2">Решено: {done}/{FX_TASKS.length}</p>
-      <div className="mt-3 space-y-4">
+      <div className="mt-3 grid lg:grid-cols-2 gap-4 items-start">
         {FX_CAT_ORDER.map(ci => { const cat = FX_CATS[ci];
           const list = FX_TASKS.filter(t => t.cat === ci);
           return (
@@ -152,13 +152,13 @@ export function FxTaskView({ task, onBack, onNext }) {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <div className="sticky top-0 bg-stone-100/95 backdrop-blur border-b border-stone-200 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-stone-200 text-stone-600"><ChevronLeft className="w-5 h-5" /></button>
           <p className="text-xs text-stone-500 truncate flex-1">Практика формул · {FX_CATS[task.cat]}</p>
           <span className="text-[11px] text-stone-400">{LEVELS[task.level]}</span>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 py-5 pb-24">
+      <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 py-5 pb-24">
         <h1 className="font-serif text-2xl sm:text-3xl">{task.title}</h1>
         <div className="mt-3 space-y-2">{task.story.map((p, i) => <p key={i} className="text-[15px] leading-relaxed">{p}</p>)}</div>
         {needTxt && <p className="text-xs text-stone-500 mt-2">Обязательно использовать: <span className="font-mono">{needTxt}</span></p>}
